@@ -5,6 +5,32 @@
 //  Created by darvintang on 2021/9/19.
 //
 
+/*
+
+ MIT License
+
+ Copyright (c) 2021 darvintang http://blog.tcoding.cn
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
+
+ */
+
 import DVTObjectMapper
 import Foundation
 import SwiftUI
@@ -22,15 +48,10 @@ public protocol SessionInit {
 open class Session: SessionInit {
     fileprivate static var _default: Session?
 
-    public static var `default`: Session {
-        if Self.self == Session.self {
-            if let value = _default {
-                return value
-            }
-            fatalError("使用前请先调用setDefault设置默认的Session")
-        } else {
-            fatalError("该属性只能用于Session类型，不能用于其子类")
-        }
+    public static var `default`: Session? {
+        assert(Self.self == Session.self, "该属性只能用于Session类型，不能用于其子类")
+        assert(_default != nil, "使用前请先调用setDefault设置默认的Session")
+        return _default
     }
 
     public static func setDefault(_ session: Session) {
@@ -148,15 +169,16 @@ public extension Session {
     /// 构造网络请求
     fileprivate func buildCustomUrlRequest(_ request: Request) -> AFDataRequest? {
         var afRequest: AFDataRequest?
+        weak var weakRequest = request
+        let httpHeader = self.httpHeaderBlock(weakRequest, weakRequest?.headers ?? [:])
         if let tempRequest = request as? UploadRequest {
-            weak var weakRequest = tempRequest
             afRequest = self.afSession.upload(multipartFormData: { fdata in
-                weakRequest?.multipartFormData(fdata)
-            }, to: tempRequest.getRequestUrl, usingThreshold: UInt64(), method: tempRequest.method, headers: tempRequest.headers).uploadProgress(queue: DispatchQueue.main, closure: { progress in
-                weakRequest?.progressBlock?(progress)
+                (weakRequest as? UploadRequest)?.multipartFormData(fdata)
+            }, to: tempRequest.requestUrl, usingThreshold: UInt64(), method: tempRequest.method, headers: httpHeader).uploadProgress(queue: DispatchQueue.main, closure: { progress in
+                (weakRequest as? UploadRequest)?.progressBlock?(progress)
             })
         } else {
-            afRequest = self.afSession.request(request.getRequestUrl, method: request.method, parameters: request.encrypt(), encoding: request.parameterEncoding, headers: request.headers)
+            afRequest = self.afSession.request(request.requestUrl, method: request.method, parameters: request.encrypt(), encoding: request.parameterEncoding, headers: httpHeader)
         }
 
         return afRequest
@@ -246,7 +268,8 @@ public extension Session {
 
     /// 添加一个请求，添加后立马执行
     func append(requestOf request: Request) {
-        guard let sendRequest = buildCustomUrlRequest(request) else {
+        request.willBuild()
+        guard let sendRequest = self.buildCustomUrlRequest(request) else {
             return
         }
         request.afRequest = sendRequest
@@ -269,28 +292,34 @@ public extension Session {
 
 /// 通过单例发起请求
 public extension Session {
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) -> Request {
-        let request = Request(self.default)
-        request.requestUrl = url
-        request.method = method
-        request.parameters = parameters
-        request.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
-        DispatchQueue.main.async {
-            self.default.append(requestOf: request)
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) -> Request? {
+        guard let session = Session.default else { return nil }
+        if let request = Request(self.default) {
+            request.requestUrl = url
+            request.method = method
+            request.parameters = parameters
+            request.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
+            DispatchQueue.main.async {
+                session.append(requestOf: request)
+            }
+            return request
         }
-        return request
+        return nil
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) -> Request {
-        let request = Request(self.default)
-        request.path = path
-        request.method = method
-        request.parameters = parameters
-        request.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
-        DispatchQueue.main.async {
-            self.default.append(requestOf: request)
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) -> Request? {
+        guard let session = Session.default else { return nil }
+        if let request = Request(self.default) {
+            request.path = path
+            request.method = method
+            request.parameters = parameters
+            request.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
+            DispatchQueue.main.async {
+                session.append(requestOf: request)
+            }
+            return request
         }
-        return request
+        return nil
     }
 }
 

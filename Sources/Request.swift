@@ -5,13 +5,43 @@
 //  Created by darvintang on 2021/9/19.
 //
 
+/*
+
+ MIT License
+
+ Copyright (c) 2021 darvintang http://blog.tcoding.cn
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
+
+ */
+
 import Foundation
 
 import typealias CommonCrypto.CC_LONG
 import func CommonCrypto.CC_MD5
 import var CommonCrypto.CC_MD5_DIGEST_LENGTH
 
-open class Request {
+public protocol RequestInit {
+    init?(_ session: Session?)
+}
+
+open class Request: RequestInit {
     public let session: Session
 
     public private(set) var identifier: String?
@@ -25,23 +55,13 @@ open class Request {
     open var resultType: ResultMappable.Type?
     open var method: AFHTTPMethod = .post
     open var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
-    open var resultEncoding: String.Encoding? = .utf8
+    open var resultEncoding: String.Encoding = .utf8
 
     // MARK: - 请求路径
 
     open var path = ""
     open var baseUrl = ""
-    /// 获取请求地址的时候请使用getRequestUrl
-    public var requestUrl = ""
-    open var getRequestUrl: String {
-        if self.requestUrl.isEmpty {
-            if self.baseUrl.isEmpty {
-                self.baseUrl = self.session.baseUrl
-            }
-            self.requestUrl = "\(self.baseUrl)/\(self.path)"
-        }
-        return self.requestUrl
-    }
+    open var requestUrl = ""
 
     // MARK: - 请求参数
 
@@ -82,34 +102,18 @@ open class Request {
         return self.session.decryptBlock(tempSelf, value)
     }
 
-    // MARK: - 缓存
-
-    /// 仅get方法有效
-    public var useCache = true
-    /// 接口缓存时间，默认为7天，单位（秒）；
-    open var cacheTime: TimeInterval {
-        willSet {
-            if newValue > self.session.cacheTime {
-                self.cacheTime = self.session.cacheTime
-            }
-        }
-    }
-
-    /// 需要忽略的参数名
-    public var cacheIgnoreParameters: [String] = []
-    open var getCacheIgnoreParameters: [String] {
-        self.cacheIgnoreParameters
-    }
-
-    /// cacheResult
-    fileprivate var cacheResult: String?
-    fileprivate var cacheCreateTime: Date?
-
     // MARK: - 初始化
 
-    public required init(_ session: Session? = nil) {
-        self.session = session ?? Session.default
+    public required init?(_ session: Session?) {
+        guard let tempSession = session ?? Session.default else {
+            return nil
+        }
+        self.session = tempSession
         self.cacheTime = 7 * 24 * 3600
+    }
+
+    public convenience init?() {
+        self.init(nil)
     }
 
     deinit {
@@ -147,6 +151,29 @@ open class Request {
     open func didCompletion(_ isCancel: Bool) {
         loger.debug("网络请求结束")
     }
+
+    // MARK: - 缓存
+
+    /// 仅httpMethod = .get有效
+    public var useCache = true
+    /// 接口缓存时间，默认为7天，单位（秒）；
+    open var cacheTime: TimeInterval {
+        willSet {
+            if newValue > self.session.cacheTime {
+                self.cacheTime = self.session.cacheTime
+            }
+        }
+    }
+
+    /// 需要忽略的参数名
+    open var cacheIgnoreParameters: [String] = []
+    open var getCacheIgnoreParameters: [String] {
+        self.cacheIgnoreParameters
+    }
+
+    /// cacheResult
+    fileprivate var cacheResult: String?
+    fileprivate var cacheCreateTime: Date?
 
     /// 针对多用户的接口缓存作用，可以用用户名等字段来分辨
     /// - Returns: 文件夹名
@@ -186,10 +213,41 @@ open class Request {
         }
         return nil
     }
+
+    // MARK: - 实现类似OC重写属性get方法设置请求
+
+    open var getResultType: ResultMappable.Type? { self.resultType }
+    open var getMethod: AFHTTPMethod { self.method }
+    open var getParameterEncoding: AFParameterEncoding { self.parameterEncoding }
+    open var getResultEncoding: String.Encoding { self.resultEncoding }
+
+    open var getPath: String { self.path }
+    open var getBaseUrl: String { self.baseUrl.isEmpty ? self.session.baseUrl : self.baseUrl }
+    open var getRequestUrl: String { self.requestUrl }
+    open var getHeaders: AFHTTPHeaders { self.headers }
+    open var getParameters: AFParameters { self.parameters }
+
+    open dynamic func willBuild() {
+        self.method = self.getMethod
+        self.parameterEncoding = self.getParameterEncoding
+        self.resultEncoding = self.getResultEncoding
+
+        self.path = self.getPath
+        self.baseUrl = self.getBaseUrl
+
+        self.requestUrl = self.getRequestUrl
+        if self.requestUrl.isEmpty {
+            self.requestUrl = "\(self.baseUrl)/\(self.path)"
+        }
+
+        self.headers = self.getHeaders
+        self.parameters = self.getParameters
+        self.resultType = self.getResultType
+    }
 }
 
 /// cache路径相关
-fileprivate extension Request {
+private extension Request {
     func md5(_ string: String) -> String {
         let length = Int(CC_MD5_DIGEST_LENGTH)
         let messageData = string.data(using: .utf8)!
@@ -215,6 +273,7 @@ fileprivate extension Request {
     }
 }
 
+/// 上传文件
 open class UploadRequest: Request {
     public var progressBlock: ProgressBlock?
     open func multipartFormData(_ formData: AFMultipartFormData) {
@@ -227,7 +286,7 @@ open class UploadRequest: Request {
     }
 }
 
-class RequestCacheInfo: Codable {
+private class RequestCacheInfo: Codable {
     let filePath: String
     let infoFilePath: String
     let expiration: TimeInterval
@@ -306,7 +365,7 @@ public class CacheManager {
     }
 }
 
-fileprivate extension CacheManager {
+private extension CacheManager {
     static func cache(_ filePath: String) -> Data? {
         let infoFilePath = RequestCacheInfo.getInfoPath(pathOf: filePath)
         if let tempCacheInfo = RequestCacheInfo.decoder(of: "\(self.cacheBasePath)/\(infoFilePath)") {
