@@ -447,7 +447,7 @@ private extension CacheManager {
     }
 
     static var cacheBasePath: String {
-        let path = (NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first ?? "").appending("/cn.tcoding.Cache.Request")
+        let path = (NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? "").appending("/cn.tcoding.Cache.Request")
         if self.createBaseDirectory(at: path) {
             _ = self.createBaseDirectory(at: path + "/info")
             return path

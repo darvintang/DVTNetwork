@@ -69,13 +69,13 @@ import Foundation
 #endif
 
 /// 网络请求成功的回调
-public typealias SuccessBlock = (Any?, Bool) -> Void
+public typealias SuccessBlock = (_ result: Any?, _ isCache: Bool) -> Void
 /// 网络请求失败的回调
-public typealias FailureBlock = (Error?) -> Void
+public typealias FailureBlock = (_ error: Error?) -> Void
 /// 网络请求完成的回调
-public typealias CompleteBlock = (Any?, Error?, Bool) -> Void
+public typealias CompleteBlock = (_ result: Any?, _ error: Error?, _ isCache: Bool) -> Void
 /// 文件上传下载进度的回调
-public typealias ProgressBlock = (Progress) -> Void
+public typealias ProgressBlock = (_ progress: Progress) -> Void
 
 public enum Scheme: String {
     case un
