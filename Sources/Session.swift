@@ -30,10 +30,11 @@
  THE SOFTWARE.
 
  */
+#if canImport(DVTLoger)
+    import DVTLoger
+#endif
 
-import DVTObjectMapper
 import Foundation
-import SwiftUI
 
 private class SeesionSource {
     var scheme = Scheme.http
@@ -91,13 +92,13 @@ open class Session: SessionInit {
         }
     }
 
-    public var openLoger: Bool {
-        didSet {
-            #if canImport(DVTLoger)
-                loger.debugLogLevel = self.openLoger ? .all : .off
-            #endif
+    #if canImport(DVTLoger)
+        public var logLevel: LogerLevel {
+            didSet {
+                loger.debugLogLevel = self.logLevel
+            }
         }
-    }
+    #endif
 
     public var cacheTime: TimeInterval
 
@@ -151,7 +152,7 @@ open class Session: SessionInit {
         self.requestsRecord = [:]
         self.afRequestsRecord = [:]
 
-        self.openLoger = true
+        self.logLevel = .info
         self.cacheTime = 7 * 30 * 360
 
         if let tempBaseUrl = baseUrl {

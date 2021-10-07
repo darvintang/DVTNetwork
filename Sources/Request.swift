@@ -88,7 +88,7 @@ open class Request: RequestInit {
     open func encrypt() -> AFParameters {
         let parameters = self.parameters
         if !parameters.isEmpty {
-            loger.debug("参数加密：", parameters)
+            loger.info("参数加密：", parameters)
         }
         weak var tempSelf = self
         return self.session.encryptBlock(tempSelf, parameters)
@@ -96,7 +96,7 @@ open class Request: RequestInit {
 
     open func decrypt(_ value: String) -> String {
         if !value.isEmpty {
-            loger.debug("接口", self.requestUrl, "的返回数据：", value)
+            loger.info("接口", self.requestUrl, "的返回数据：", value)
         }
         weak var tempSelf = self
         return self.session.decryptBlock(tempSelf, value)
@@ -108,6 +108,7 @@ open class Request: RequestInit {
         guard let tempSession = session ?? Session.default else {
             return nil
         }
+        loger.debug("init \(Self.self)")
         self.session = tempSession
         self.cacheTime = 7 * 24 * 3600
     }
@@ -117,7 +118,7 @@ open class Request: RequestInit {
     }
 
     deinit {
-        loger.info("deinit \(Self.self)")
+        loger.debug("deinit \(Self.self)")
     }
 
     open func preOperation(_ value: Any?, error: Error?, isCache: Bool) -> (Any?, Error?) {
@@ -126,12 +127,17 @@ open class Request: RequestInit {
 
     /// 即将发起请求
     open func willStart() {
-        loger.debug("开始网络请求<", self.requestUrl, ">")
-        if !self.headers.isEmpty {
-            print("请求头：\n", self.headers)
-        }
-        if !self.parameters.isEmpty {
-            print("请求体：\n", self.parameters)
+        if loger.debugLogLevel == .info {
+            var string = ""
+            string = "开始网络请求<" + self.requestUrl + ">\n"
+
+            if !self.headers.isEmpty {
+                string += "请求头：\n\(self.headers)\n)"
+            }
+            if !self.parameters.isEmpty {
+                string += "请求体：\n\(self.headers)\n)"
+            }
+            loger.info(string)
         }
     }
 
@@ -149,21 +155,15 @@ open class Request: RequestInit {
 
     /// 已经结束请求，是否是取消
     open func didCompletion(_ isCancel: Bool) {
-        loger.debug("网络请求结束")
+        loger.info("网络请求结束")
     }
 
     // MARK: - 缓存
 
     /// 仅httpMethod = .get有效
     public var useCache = true
-    /// 接口缓存时间，默认为7天，单位（秒）；
-    open var cacheTime: TimeInterval {
-        willSet {
-            if newValue > self.session.cacheTime {
-                self.cacheTime = self.session.cacheTime
-            }
-        }
-    }
+    /// 接口缓存时间，默认为7天，单位（秒）; 如果超过session的缓存时间无效
+    open var cacheTime: TimeInterval
 
     /// 需要忽略的参数名
     open var cacheIgnoreParameters: [String] = []
@@ -228,6 +228,7 @@ open class Request: RequestInit {
     open var getParameters: AFParameters { self.parameters }
 
     open dynamic func willBuild() {
+        self.cacheTime = min(self.cacheTime, self.session.cacheTime)
         self.method = self.getMethod
         self.parameterEncoding = self.getParameterEncoding
         self.resultEncoding = self.getResultEncoding
