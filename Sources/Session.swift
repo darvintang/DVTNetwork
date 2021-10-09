@@ -225,19 +225,19 @@ public extension Session {
         }
 
         switch result.result {
-        case let .success(resultValue):
-            // 在这里可以把结果缓存
-            handleRequest.saveCache(resultValue)
-            self.success(handleRequest, value: resultValue, isCache: false)
+            case let .success(resultValue):
+                // 在这里可以把结果缓存
+                handleRequest.saveCache(resultValue)
+                self.success(handleRequest, value: resultValue, isCache: false)
 
-        case let .failure(error):
-            let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
-            if let failureBlock = request.failureBlock {
-                failureBlock(handleError)
-            }
-            if let completeBlock = request.completedBlock {
-                completeBlock(nil, handleError, false)
-            }
+            case let .failure(error):
+                let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
+                if let failureBlock = request.failureBlock {
+                    failureBlock(handleError)
+                }
+                if let completeBlock = request.completedBlock {
+                    completeBlock(nil, handleError, false)
+                }
         }
         handleRequest.didCompletion(false)
     }
@@ -293,7 +293,15 @@ public extension Session {
 
 /// 通过单例发起请求
 public extension Session {
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completed completedBlock: CompleteBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completed: completedBlock)
+    }
+
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: successBlock, failure: failureBlock, completed: nil)
+    }
+
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default) {
             request.requestUrl = url
@@ -308,7 +316,15 @@ public extension Session {
         return nil
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completed completedBlock: CompleteBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completed: completedBlock)
+    }
+
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: successBlock, failure: failureBlock, completed: nil)
+    }
+
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default) {
             request.path = path

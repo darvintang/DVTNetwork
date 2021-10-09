@@ -89,6 +89,7 @@ public typealias AFSession = Alamofire.Session
 
 public typealias AFRequest = Alamofire.Request
 public typealias AFDataRequest = Alamofire.DataRequest
+public typealias AFDataResponse = Alamofire.DataResponse
 public typealias AFStringDataResponse = Alamofire.AFDataResponse<String>
 
 public typealias AFHTTPMethod = Alamofire.HTTPMethod
@@ -99,3 +100,6 @@ public typealias AFMultipartFormData = Alamofire.MultipartFormData
 public typealias AFParameterEncoding = Alamofire.ParameterEncoding
 public typealias AFJSONEncoding = Alamofire.JSONEncoding
 public typealias AFURLEncoding = Alamofire.URLEncoding
+
+public typealias AFNetworkReachabilityManager = Alamofire.NetworkReachabilityManager
+public typealias AFNetworkReachabilityStatus = AFNetworkReachabilityManager.NetworkReachabilityStatus

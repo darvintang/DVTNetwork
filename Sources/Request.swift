@@ -77,7 +77,7 @@ open class Request: RequestInit {
     /// 请求完成的回调
     public var completedBlock: CompleteBlock?
 
-    public func setRequestBlock(_ successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) {
+    public func setRequestBlock(_ successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) {
         self.successBlock = successBlock
         self.failureBlock = failureBlock
         self.completedBlock = completedBlock
@@ -141,8 +141,16 @@ open class Request: RequestInit {
         }
     }
 
+    open func start(_ completedBlock: CompleteBlock?) {
+        self.start(nil, failure: nil, completed: completedBlock)
+    }
+
+    open func start(_ successBlock: SuccessBlock?, failure failureBlock: FailureBlock?) {
+        self.start(successBlock, failure: failureBlock, completed: nil)
+    }
+
     /// 发起请求
-    open func start(_ successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, completed completedBlock: CompleteBlock? = nil) {
+    open func start(_ successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) {
         self.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
         self.session.append(requestOf: self)
     }
