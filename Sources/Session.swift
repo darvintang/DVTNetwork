@@ -176,7 +176,7 @@ public extension Session {
             afRequest = self.afSession.upload(multipartFormData: { fdata in
                 (weakRequest as? UploadRequest)?.multipartFormData(fdata)
             }, to: tempRequest.requestUrl, usingThreshold: UInt64(), method: tempRequest.method, headers: httpHeader).uploadProgress(queue: DispatchQueue.main, closure: { progress in
-                (weakRequest as? UploadRequest)?.progressBlock?(progress)
+                (weakRequest as? UploadRequest)?.progress?(progress)
             })
         } else {
             afRequest = self.afSession.request(request.requestUrl, method: request.method, parameters: request.encrypt(), encoding: request.parameterEncoding, headers: httpHeader)
@@ -198,16 +198,16 @@ public extension Session {
             }
         }
 
-        if let successBlock = request.successBlock, handleError == nil {
-            successBlock(resultValue, isCache)
+        if let success = request.success, handleError == nil {
+            success(resultValue, isCache)
         }
 
-        if let failureBlock = request.failureBlock, handleError != nil {
-            failureBlock(handleError)
+        if let failure = request.failure, handleError != nil {
+            failure(handleError)
         }
 
-        if let completeBlock = request.completedBlock {
-            completeBlock(resultValue, handleError, isCache)
+        if let completion = request.completion {
+            completion(resultValue, handleError, isCache)
         }
     }
 
@@ -232,11 +232,11 @@ public extension Session {
 
             case let .failure(error):
                 let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
-                if let failureBlock = request.failureBlock {
-                    failureBlock(handleError)
+                if let failure = request.failure {
+                    failure(handleError)
                 }
-                if let completeBlock = request.completedBlock {
-                    completeBlock(nil, handleError, false)
+                if let completion = request.completion {
+                    completion(nil, handleError, false)
                 }
         }
         handleRequest.didCompletion(false)
@@ -293,21 +293,21 @@ public extension Session {
 
 /// 通过单例发起请求
 public extension Session {
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completed completedBlock: CompleteBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completed: completedBlock)
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompleteBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completion: completion)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: successBlock, failure: failureBlock, completed: nil)
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: success, failure: failure, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default) {
             request.requestUrl = url
             request.method = method
             request.parameters = parameters
-            request.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
+            request.setRequestBlock(success, failure: failure, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }
@@ -316,21 +316,21 @@ public extension Session {
         return nil
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completed completedBlock: CompleteBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completed: completedBlock)
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompleteBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completion: completion)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: successBlock, failure: failureBlock, completed: nil)
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: success, failure: failure, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default) {
             request.path = path
             request.method = method
             request.parameters = parameters
-            request.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
+            request.setRequestBlock(success, failure: failure, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }

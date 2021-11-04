@@ -71,16 +71,16 @@ open class Request: RequestInit {
     // MARK: - 请求处理
 
     /// 请求成功的回调
-    public var successBlock: SuccessBlock?
+    public var success: SuccessBlock?
     /// 请求失败的回调
-    public var failureBlock: FailureBlock?
+    public var failure: FailureBlock?
     /// 请求完成的回调
-    public var completedBlock: CompleteBlock?
+    public var completion: CompleteBlock?
 
-    public func setRequestBlock(_ successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) {
-        self.successBlock = successBlock
-        self.failureBlock = failureBlock
-        self.completedBlock = completedBlock
+    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) {
+        self.success = success
+        self.failure = failure
+        self.completion = completion
     }
 
     // MARK: - 加解密
@@ -141,17 +141,17 @@ open class Request: RequestInit {
         }
     }
 
-    open func start(_ completedBlock: CompleteBlock?) {
-        self.start(nil, failure: nil, completed: completedBlock)
+    open func start(_ completion: CompleteBlock?) {
+        self.start(nil, failure: nil, completion: completion)
     }
 
-    open func start(_ successBlock: SuccessBlock?, failure failureBlock: FailureBlock?) {
-        self.start(successBlock, failure: failureBlock, completed: nil)
+    open func start(_ success: SuccessBlock?, failure: FailureBlock?) {
+        self.start(success, failure: failure, completion: nil)
     }
 
     /// 发起请求
-    open func start(_ successBlock: SuccessBlock?, failure failureBlock: FailureBlock?, completed completedBlock: CompleteBlock?) {
-        self.setRequestBlock(successBlock, failure: failureBlock, completed: completedBlock)
+    open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) {
+        self.setRequestBlock(success, failure: failure, completion: completion)
         self.session.append(requestOf: self)
     }
 
@@ -284,14 +284,14 @@ private extension Request {
 
 /// 上传文件
 open class UploadRequest: Request {
-    public var progressBlock: ProgressBlock?
+    public var progress: ProgressBlock?
     open func multipartFormData(_ formData: AFMultipartFormData) {
     }
 
     /// 发起请求
-    open func start(_ successBlock: SuccessBlock? = nil, failure failureBlock: FailureBlock? = nil, progress progressBlock: ProgressBlock? = nil, completed completedBlock: CompleteBlock? = nil) {
-        self.progressBlock = progressBlock
-        self.start(successBlock, failure: failureBlock, completed: completedBlock)
+    open func start(_ success: SuccessBlock? = nil, failure: FailureBlock? = nil, progress: ProgressBlock? = nil, completion: CompleteBlock? = nil) {
+        self.progress = progress
+        self.start(success, failure: failure, completion: completion)
     }
 }
 
@@ -397,14 +397,14 @@ private extension CacheManager {
         return nil
     }
 
-    static func addCache(_ filePath: String, value: String, expiration: TimeInterval, completedBlock: ((_ success: Bool) -> Void)? = nil) {
+    static func addCache(_ filePath: String, value: String, expiration: TimeInterval, completionBlock: ((_ success: Bool) -> Void)? = nil) {
         self.addCache(filePath, data: value.data(using: .utf8) ?? Data(), expiration: expiration)
     }
 
-    static func addCache(_ filePath: String, data: Data, expiration: TimeInterval, completedBlock: ((_ success: Bool) -> Void)? = nil) {
+    static func addCache(_ filePath: String, data: Data, expiration: TimeInterval, completionBlock: ((_ success: Bool) -> Void)? = nil) {
         guard !self.cacheBasePath.isEmpty && !filePath.isEmpty else {
-            if completedBlock != nil {
-                completedBlock?(false)
+            if completionBlock != nil {
+                completionBlock?(false)
             }
             return
         }
@@ -419,8 +419,8 @@ private extension CacheManager {
             }
             if flag {
                 flag = cacheInfo.encoder(of: "\(self.cacheBasePath)/\(cacheInfo.infoFilePath)")
-                if completedBlock != nil {
-                    completedBlock?(flag)
+                if completionBlock != nil {
+                    completionBlock?(flag)
                 }
             }
         }
