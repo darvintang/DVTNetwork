@@ -73,7 +73,7 @@ public typealias SuccessBlock = (_ result: Any?, _ isCache: Bool) -> Void
 /// 网络请求失败的回调
 public typealias FailureBlock = (_ error: Error?) -> Void
 /// 网络请求完成的回调
-public typealias CompleteBlock = (_ result: Any?, _ error: Error?, _ isCache: Bool) -> Void
+public typealias CompletionBlock = (_ result: Any?, _ error: Error?, _ isCache: Bool) -> Void
 /// 文件上传下载进度的回调
 public typealias ProgressBlock = (_ progress: Progress) -> Void
 

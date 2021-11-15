@@ -75,9 +75,9 @@ open class Request: RequestInit {
     /// 请求失败的回调
     public var failure: FailureBlock?
     /// 请求完成的回调
-    public var completion: CompleteBlock?
+    public var completion: CompletionBlock?
 
-    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) {
+    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
         self.success = success
         self.failure = failure
         self.completion = completion
@@ -141,7 +141,7 @@ open class Request: RequestInit {
         }
     }
 
-    open func start(_ completion: CompleteBlock?) {
+    open func start(_ completion: CompletionBlock?) {
         self.start(nil, failure: nil, completion: completion)
     }
 
@@ -150,7 +150,7 @@ open class Request: RequestInit {
     }
 
     /// 发起请求
-    open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) {
+    open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
         self.setRequestBlock(success, failure: failure, completion: completion)
         self.session.append(requestOf: self)
     }
@@ -289,7 +289,7 @@ open class UploadRequest: Request {
     }
 
     /// 发起请求
-    open func start(_ success: SuccessBlock? = nil, failure: FailureBlock? = nil, progress: ProgressBlock? = nil, completion: CompleteBlock? = nil) {
+    open func start(_ success: SuccessBlock? = nil, failure: FailureBlock? = nil, progress: ProgressBlock? = nil, completion: CompletionBlock? = nil) {
         self.progress = progress
         self.start(success, failure: failure, completion: completion)
     }

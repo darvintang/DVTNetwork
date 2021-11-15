@@ -293,7 +293,7 @@ public extension Session {
 
 /// 通过单例发起请求
 public extension Session {
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompleteBlock?) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
         self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completion: completion)
     }
 
@@ -301,7 +301,7 @@ public extension Session {
         self.send(method, url: url, parameters: parameters, success: success, failure: failure, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default) {
             request.requestUrl = url
@@ -316,7 +316,7 @@ public extension Session {
         return nil
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompleteBlock?) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
         self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completion: completion)
     }
 
@@ -324,7 +324,7 @@ public extension Session {
         self.send(method, path: path, parameters: parameters, success: success, failure: failure, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
+    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default) {
             request.path = path
