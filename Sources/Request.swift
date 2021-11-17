@@ -37,11 +37,7 @@ import typealias CommonCrypto.CC_LONG
 import func CommonCrypto.CC_MD5
 import var CommonCrypto.CC_MD5_DIGEST_LENGTH
 
-public protocol RequestInit {
-    init?(_ session: Session?)
-}
-
-open class Request: RequestInit {
+open class Request {
     public let session: Session
 
     public private(set) var identifier: String?
@@ -52,21 +48,47 @@ open class Request: RequestInit {
     }
 
     /// 在导入了DVTObjectMapper或ObjectMapper后使用
-    open var resultType: ResultMappable.Type?
-    open var method: AFHTTPMethod = .post
-    open var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
-    open var resultEncoding: String.Encoding = .utf8
+    open private(set) var resultType: ResultMappable.Type?
+    open private(set) var method: AFHTTPMethod = .post
+    open private(set) var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
+    open private(set) var resultEncoding: String.Encoding = .utf8
 
     // MARK: - 请求路径
 
-    open var path = ""
-    open var baseUrl = ""
-    open var requestUrl = ""
+    open private(set) var path: String
+
+    private var _baseUrl: String = ""
+    open var baseUrl: String {
+        if Session.getStringType(self._baseUrl) == .host {
+            return self._baseUrl
+        } else {
+            self._baseUrl = self.session.baseUrl
+        }
+        return self._baseUrl
+    }
+
+    private var _requestUrl: String = ""
+    open var requestUrl: String {
+        if Session.getStringType(self._requestUrl) == .url {
+            return self._requestUrl
+        } else {
+            var baseurl = self.baseUrl
+            if baseurl.hasSuffix("/") {
+                baseurl.removeLast()
+            }
+            var path = self.path
+            if path.hasSuffix("/") {
+                path.removeFirst()
+            }
+            self._requestUrl = baseurl + "/" + path
+        }
+        return self._requestUrl
+    }
 
     // MARK: - 请求参数
 
-    open var headers: AFHTTPHeaders = [:]
-    open var parameters: AFParameters = [:]
+    open private(set) var headers: AFHTTPHeaders = [:]
+    open private(set) var parameters: AFParameters = [:]
 
     // MARK: - 请求处理
 
@@ -85,8 +107,7 @@ open class Request: RequestInit {
 
     // MARK: - 加解密
 
-    open func encrypt() -> AFParameters {
-        let parameters = self.parameters
+    open func encrypt(_ parameters: AFParameters) -> AFParameters {
         if !parameters.isEmpty {
             loger.info("参数加密：", parameters)
         }
@@ -104,13 +125,22 @@ open class Request: RequestInit {
 
     // MARK: - 初始化
 
-    public required init?(_ session: Session?) {
+    public required init?(_ session: Session?, resultType: ResultMappable.Type? = nil, method: AFHTTPMethod = .post, parameterEncoding: AFParameterEncoding = AFURLEncoding.default, resultEncoding: String.Encoding = .utf8, path: String = "", baseUrl: String = "", requestUrl: String = "", headers: AFHTTPHeaders = [:], parameters: AFParameters = [:], useCache: Bool = false, cacheTime: TimeInterval = 7 * 24 * 3600) {
         guard let tempSession = session ?? Session.default else {
             return nil
         }
-        loger.debug("init \(Self.self)")
         self.session = tempSession
-        self.cacheTime = 7 * 24 * 3600
+        self.resultType = resultType
+        self.method = method
+        self.parameterEncoding = parameterEncoding
+        self.resultEncoding = resultEncoding
+        self.path = path
+        self._baseUrl = baseUrl
+        self._requestUrl = requestUrl
+        self.headers = headers
+        self.parameters = parameters
+        self.useCache = useCache
+        self.cacheTime = cacheTime
     }
 
     public convenience init?() {
@@ -169,9 +199,9 @@ open class Request: RequestInit {
     // MARK: - 缓存
 
     /// 仅httpMethod = .get有效
-    public var useCache = true
+    public var useCache = false
     /// 接口缓存时间，默认为7天，单位（秒）; 如果超过session的缓存时间无效
-    open var cacheTime: TimeInterval
+    public var cacheTime: TimeInterval
 
     /// 需要忽略的参数名
     open var cacheIgnoreParameters: [String] = []
@@ -220,38 +250,6 @@ open class Request: RequestInit {
             return value
         }
         return nil
-    }
-
-    // MARK: - 实现类似OC重写属性get方法设置请求
-
-    open var getResultType: ResultMappable.Type? { self.resultType }
-    open var getMethod: AFHTTPMethod { self.method }
-    open var getParameterEncoding: AFParameterEncoding { self.parameterEncoding }
-    open var getResultEncoding: String.Encoding { self.resultEncoding }
-
-    open var getPath: String { self.path }
-    open var getBaseUrl: String { self.baseUrl.isEmpty ? self.session.baseUrl : self.baseUrl }
-    open var getRequestUrl: String { self.requestUrl }
-    open var getHeaders: AFHTTPHeaders { self.headers }
-    open var getParameters: AFParameters { self.parameters }
-
-    open dynamic func willBuild() {
-        self.cacheTime = min(self.cacheTime, self.session.cacheTime)
-        self.method = self.getMethod
-        self.parameterEncoding = self.getParameterEncoding
-        self.resultEncoding = self.getResultEncoding
-
-        self.path = self.getPath
-        self.baseUrl = self.getBaseUrl
-
-        self.requestUrl = self.getRequestUrl
-        if self.requestUrl.isEmpty {
-            self.requestUrl = "\(self.baseUrl)/\(self.path)"
-        }
-
-        self.headers = self.getHeaders
-        self.parameters = self.getParameters
-        self.resultType = self.getResultType
     }
 }
 

@@ -100,7 +100,7 @@ open class Session: SessionInit {
         }
     #endif
 
-    public var cacheTime: TimeInterval
+    public var useCache = true
 
     /// 加密操作
     public var encryptBlock: (_ request: Request?, _ parameters: AFParameters) -> AFParameters
@@ -153,7 +153,6 @@ open class Session: SessionInit {
         self.afRequestsRecord = [:]
 
         self.logLevel = .info
-        self.cacheTime = 7 * 30 * 360
 
         if let tempBaseUrl = baseUrl {
             self.baseUrl = tempBaseUrl
@@ -179,7 +178,8 @@ public extension Session {
                 (weakRequest as? UploadRequest)?.progress?(progress)
             })
         } else {
-            afRequest = self.afSession.request(request.requestUrl, method: request.method, parameters: request.encrypt(), encoding: request.parameterEncoding, headers: httpHeader)
+            let parameters = request.parameters
+            afRequest = self.afSession.request(request.requestUrl, method: request.method, parameters: request.encrypt(parameters), encoding: request.parameterEncoding, headers: httpHeader)
         }
 
         return afRequest
@@ -269,7 +269,6 @@ public extension Session {
 
     /// 添加一个请求，添加后立马执行
     func append(requestOf request: Request) {
-        request.willBuild()
         guard let sendRequest = self.buildCustomUrlRequest(request) else {
             return
         }
@@ -282,7 +281,7 @@ public extension Session {
         }
         request.willStart()
         // 在这里读取缓存
-        if request.cacheTime > 0, let resultValue = request.cache() {
+        if self.useCache, request.useCache, request.cacheTime > 0, let resultValue = request.cache() {
             self.success(request, value: resultValue, isCache: true)
         }
         sendRequest.validate(statusCode: 200 ..< 300).responseString(encoding: request.resultEncoding) { [weak self] result in
@@ -303,10 +302,7 @@ public extension Session {
 
     @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
         guard let session = Session.default else { return nil }
-        if let request = Request(self.default) {
-            request.requestUrl = url
-            request.method = method
-            request.parameters = parameters
+        if let request = Request(self.default, method: method, requestUrl: url, parameters: parameters) {
             request.setRequestBlock(success, failure: failure, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
@@ -326,10 +322,7 @@ public extension Session {
 
     @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
         guard let session = Session.default else { return nil }
-        if let request = Request(self.default) {
-            request.path = path
-            request.method = method
-            request.parameters = parameters
+        if let request = Request(self.default, method: method, path: path, parameters: parameters) {
             request.setRequestBlock(success, failure: failure, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
