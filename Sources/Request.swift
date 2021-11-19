@@ -2,7 +2,7 @@
 //  Request.swift
 //
 //
-//  Created by darvintang on 2021/9/19.
+//  Created by darvin on 2021/9/19.
 //
 
 /*
@@ -57,32 +57,21 @@ open class Request {
 
     open private(set) var path: String
 
-    private var _baseUrl: String = ""
-    open var baseUrl: String {
-        if Session.getStringType(self._baseUrl) == .host {
-            return self._baseUrl
-        } else {
-            self._baseUrl = self.session.baseUrl
-        }
-        return self._baseUrl
+    private var _baseUrl: URL?
+    public var baseUrl: URL {
+        self._baseUrl ?? self.session.baseUrl
     }
 
-    private var _requestUrl: String = ""
-    open var requestUrl: String {
-        if Session.getStringType(self._requestUrl) == .url {
-            return self._requestUrl
-        } else {
-            var baseurl = self.baseUrl
-            if baseurl.hasSuffix("/") {
-                baseurl.removeLast()
+    private var _requestUrl: URL?
+    open var requestUrl: URL {
+        if self._requestUrl == nil {
+            var newPath = self.path
+            while newPath.hasPrefix("/") {
+                newPath.removeFirst()
             }
-            var path = self.path
-            if path.hasSuffix("/") {
-                path.removeFirst()
-            }
-            self._requestUrl = baseurl + "/" + path
+            self._requestUrl = self.baseUrl.appendingPathComponent(newPath)
         }
-        return self._requestUrl
+        return self._requestUrl ?? self.baseUrl
     }
 
     // MARK: - 请求参数
@@ -129,14 +118,26 @@ open class Request {
         guard let tempSession = session ?? Session.default else {
             return nil
         }
+
+        var newPath = path
+        while newPath.hasPrefix("/") {
+            newPath.removeFirst()
+        }
+        self.path = newPath
+
+        var newBaseUrl = baseUrl
+        while newBaseUrl.hasSuffix("/") {
+            newBaseUrl.removeLast()
+        }
+        self._baseUrl = URL(string: newBaseUrl)
+
+        self._requestUrl = URL(string: requestUrl)
+
         self.session = tempSession
         self.resultType = resultType
         self.method = method
         self.parameterEncoding = parameterEncoding
         self.resultEncoding = resultEncoding
-        self.path = path
-        self._baseUrl = baseUrl
-        self._requestUrl = requestUrl
         self.headers = headers
         self.parameters = parameters
         self.useCache = useCache
@@ -159,7 +160,7 @@ open class Request {
     open func willStart() {
         if loger.debugLogLevel == .info {
             var string = ""
-            string = "开始网络请求<" + self.requestUrl + ">\n"
+            string = "开始网络请求<" + self.requestUrl.absoluteString + ">\n"
 
             if !self.headers.isEmpty {
                 string += "请求头：\n\(self.headers)\n)"
@@ -276,7 +277,7 @@ private extension Request {
         let parameters = self.parameters.filter({ !self.cacheIgnoreParameters.contains($0.key) }).sorted {
             $0.key.uppercased() > $1.key.uppercased()
         }
-        return self.md5(String(format: "%@%@", self.requestUrl, parameters)) + ".request"
+        return self.md5(String(format: "%@%@", self.requestUrl.absoluteString, parameters)) + ".request"
     }
 }
 
