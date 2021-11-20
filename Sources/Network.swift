@@ -9,7 +9,7 @@
 
  MIT License
 
- Copyright (c) 2021 darvintang http://blog.tcoding.cn
+ Copyright (c) 2021 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -38,7 +38,7 @@ import Foundation
 
 #if canImport(DVTLoger)
     import DVTLoger
-    let loger = Loger("network")
+    let loger = Loger("cn.tcoding.network", logerName: "DVTNetwork")
 #else
     struct Loger {
         func debug(_ value: Any...) {
