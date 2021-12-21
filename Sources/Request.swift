@@ -58,7 +58,7 @@ open class Request {
     open private(set) var path: String
 
     private var _baseUrl: URL?
-    public var baseUrl: URL {
+    open var baseUrl: URL {
         self._baseUrl ?? self.session.baseUrl
     }
 
