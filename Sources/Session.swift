@@ -30,10 +30,8 @@
  THE SOFTWARE.
 
  */
-#if canImport(DVTLoger)
-    import DVTLoger
-#endif
 
+import DVTLoger
 import Foundation
 
 open class Session {
@@ -79,7 +77,7 @@ open class Session {
     #if canImport(DVTLoger)
         public var logLevel: LogerLevel {
             didSet {
-                loger.debugLogLevel = self.logLevel
+                netLoger.debugLogLevel = self.logLevel
             }
         }
     #endif
@@ -134,6 +132,9 @@ open class Session {
         return false
     }
 
+    /// 是否允许请求
+    /// - Parameter request: 网络请求对象
+    /// - Returns: 错误信息，如果不允许就返回错误信息
     open func allowRequest(_ request: Request) -> Error? {
         return self.allowRequestBlock(request)
     }
@@ -141,26 +142,8 @@ open class Session {
 
 /// 请求管理
 public extension Session {
-    /// 构造网络请求
-    fileprivate func buildCustomUrlRequest(_ request: Request) -> AFDataRequest? {
-        var afRequest: AFDataRequest?
-        weak var weakRequest = request
-        let httpHeader = self.httpHeaderBlock(weakRequest, weakRequest?.headers ?? [:])
-        if let tempRequest = request as? UploadRequest {
-            afRequest = self.afSession.upload(multipartFormData: { fdata in
-                (weakRequest as? UploadRequest)?.multipartFormData(fdata)
-            }, to: tempRequest.requestUrl, usingThreshold: UInt64(), method: tempRequest.method, headers: httpHeader).uploadProgress(queue: DispatchQueue.main, closure: { progress in
-                (weakRequest as? UploadRequest)?.progress?(progress)
-            })
-        } else {
-            let parameters = request.parameters
-            afRequest = self.afSession.request(request.requestUrl, method: request.method, parameters: request.encrypt(parameters), encoding: request.parameterEncoding, headers: httpHeader)
-        }
-
-        return afRequest
-    }
-
-    fileprivate func success(_ request: Request, value: String, isCache: Bool) {
+    fileprivate
+    func success(_ request: Request, value: String, isCache: Bool) {
         let tempValue = request.decrypt(value)
         let (handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache)
         var resultValue = handleValue
@@ -187,7 +170,8 @@ public extension Session {
     }
 
     /// 处理请求结果
-    fileprivate func handleRequestResult(_ request: Request, result: AFStringDataResponse) {
+    fileprivate
+    func handleRequestResult(_ request: Request, result: AFStringDataResponse) {
         var tempRequest: Request?
         self.queue.sync { [weak self] in
             if let key = request.identifier, !key.isEmpty {
@@ -246,20 +230,20 @@ public extension Session {
     func append(requestOf request: Request) {
         if let error = self.allowRequest(request) {
             let handleError = request.preOperation(nil, error: error, isCache: false).1
-            if let failure = request.failure {
-                failure(handleError)
-            }
-            if let completion = request.completion {
-                completion(nil, handleError, false)
-            }
+            request.failure?(handleError)
+            request.completion?(nil, handleError, false)
             return
         }
 
-        guard let sendRequest = self.buildCustomUrlRequest(request) else {
+        request.buildCustomUrlRequest(self.afSession)
+        guard let sendRequest = request.afRequest as? AFDataRequest else {
+            let error = AFError.createURLRequestFailed(error: NSError(domain: "初始化失败", code: -999, userInfo: nil))
+            request.failure?(error)
+            request.completion?(nil, error, false)
             return
         }
 
-        request.afRequest = sendRequest
+        // 将请求添加到任务记录容器
         self.queue.sync { [weak self] in
             if let key = request.identifier, !key.isEmpty {
                 self?.requestsRecord[key] = request
@@ -279,15 +263,18 @@ public extension Session {
 
 /// 通过单例发起请求
 public extension Session {
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
         self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completion: completion)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
         self.send(method, url: url, parameters: parameters, success: success, failure: failure, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
+    @discardableResult fileprivate
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, requestUrl: url, parameters: parameters) {
             request.setRequestBlock(success, failure: failure, completion: completion)
@@ -299,15 +286,18 @@ public extension Session {
         return nil
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
         self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completion: completion)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
         self.send(method, path: path, parameters: parameters, success: success, failure: failure, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
+    @discardableResult fileprivate
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, path: path, parameters: parameters) {
             request.setRequestBlock(success, failure: failure, completion: completion)

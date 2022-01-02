@@ -96,9 +96,10 @@ open class Request {
 
     // MARK: - 加解密
 
-    open func encrypt(_ parameters: AFParameters) -> AFParameters {
+    open func encrypt() -> AFParameters {
+        let parameters = self.parameters
         if !parameters.isEmpty {
-            loger.info("参数加密：", parameters)
+            netLoger.info("参数加密：", parameters)
         }
         weak var tempSelf = self
         return self.session.encryptBlock(tempSelf, parameters)
@@ -106,7 +107,7 @@ open class Request {
 
     open func decrypt(_ value: String) -> String {
         if !value.isEmpty {
-            loger.info("接口", self.requestUrl, "的返回数据：", value)
+            netLoger.info("接口", self.requestUrl, "的返回数据：", value)
         }
         weak var tempSelf = self
         return self.session.decryptBlock(tempSelf, value)
@@ -149,16 +150,21 @@ open class Request {
     }
 
     deinit {
-        loger.debug("deinit \(Self.self)")
+        netLoger.debug("deinit \(Self.self)")
     }
 
     open func preOperation(_ value: Any?, error: Error?, isCache: Bool) -> (Any?, Error?) {
         return self.session.preOperationCallBack(self, value, error, isCache)
     }
 
+    /// 构造网络请求
+    open func buildCustomUrlRequest(_ afSeeion: AFSession) {
+        self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: self.encrypt(), encoding: self.parameterEncoding, headers: self.session.httpHeaderBlock(self, self.headers))
+    }
+
     /// 即将发起请求
     open func willStart() {
-        if loger.debugLogLevel == .info {
+        if netLoger.debugLogLevel == .info {
             var string = ""
             string = "开始网络请求<" + self.requestUrl.absoluteString + ">\n"
 
@@ -168,7 +174,7 @@ open class Request {
             if !self.parameters.isEmpty {
                 string += "请求体：\n\(self.headers)\n)"
             }
-            loger.info(string)
+            netLoger.debug(string)
         }
     }
 
@@ -194,7 +200,7 @@ open class Request {
 
     /// 已经结束请求，是否是取消
     open func didCompletion(_ isCancel: Bool) {
-        loger.info("网络请求结束")
+        netLoger.debug("网络请求结束")
     }
 
     // MARK: - 缓存
@@ -205,10 +211,7 @@ open class Request {
     public var cacheTime: TimeInterval
 
     /// 需要忽略的参数名
-    open var cacheIgnoreParameters: [String] = []
-    open var getCacheIgnoreParameters: [String] {
-        self.cacheIgnoreParameters
-    }
+    open private(set) var cacheIgnoreParameters: [String] = []
 
     /// cacheResult
     fileprivate var cacheResult: String?
@@ -278,19 +281,6 @@ private extension Request {
             $0.key.uppercased() > $1.key.uppercased()
         }
         return self.md5(String(format: "%@%@", self.requestUrl.absoluteString, parameters)) + ".request"
-    }
-}
-
-/// 上传文件
-open class UploadRequest: Request {
-    public var progress: ProgressBlock?
-    open func multipartFormData(_ formData: AFMultipartFormData) {
-    }
-
-    /// 发起请求
-    open func start(_ success: SuccessBlock? = nil, failure: FailureBlock? = nil, progress: ProgressBlock? = nil, completion: CompletionBlock? = nil) {
-        self.progress = progress
-        self.start(success, failure: failure, completion: completion)
     }
 }
 
@@ -413,7 +403,7 @@ private extension CacheManager {
             do {
                 try data.write(to: URL(fileURLWithPath: "\(self.cacheBasePath)/\(cacheInfo.filePath)"))
             } catch let error {
-                loger.info(error)
+                netLoger.error(error)
                 flag = false
             }
             if flag {

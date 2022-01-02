@@ -36,37 +36,11 @@ import Foundation
 
 // 依赖DVTLoger，DVTObjectMapper。如果直接把源码拖到项目中去canImport才有其作用
 
-#if canImport(DVTLoger)
-    import DVTLoger
-    let loger = Loger("cn.tcoding.network", logerName: "DVTNetwork")
-#else
-    struct Loger {
-        func debug(_ value: Any...) {
-        }
+import DVTLoger
+public let netLoger = Loger("cn.tcoding.network", logerName: "DVTNetwork")
 
-        func info(_ value: Any...) {
-        }
-    }
-
-    let loger = Loger()
-#endif
-
-#if canImport(DVTObjectMapper) || canImport(ObjectMapper)
-    #if canImport(DVTObjectMapper)
-        import DVTObjectMapper
-    #else
-        import ObjectMapper
-    #endif
-    public typealias ResultMappable = Mappable
-#else
-    public protocol DVTMappable {
-        init?(JSONString: String)
-        init?(JSON: [String: Any])
-    }
-
-    public typealias ResultMappable = DVTMappable
-    public typealias Map = Any
-#endif
+import DVTObjectMapper
+public typealias ResultMappable = Mappable
 
 /// 网络请求成功的回调
 public typealias SuccessBlock = (_ result: Any?, _ isCache: Bool) -> Void
@@ -91,6 +65,8 @@ public typealias AFRequest = Alamofire.Request
 public typealias AFDataRequest = Alamofire.DataRequest
 public typealias AFDataResponse = Alamofire.DataResponse
 public typealias AFStringDataResponse = Alamofire.AFDataResponse<String>
+
+public typealias AFError = Alamofire.AFError
 
 public typealias AFHTTPMethod = Alamofire.HTTPMethod
 public typealias AFHTTPHeaders = Alamofire.HTTPHeaders

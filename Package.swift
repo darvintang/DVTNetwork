@@ -20,7 +20,7 @@ let package = Package(
 
     dependencies: [
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")),
-        .package(url: "https://github.com/darvintang/DVTLoger.git", .upToNextMajor(from: "1.0.0")),
+        .package(url: "https://github.com/darvintang/DVTLoger.git", .upToNextMajor(from: "1.0.3")),
         .package(url: "https://github.com/darvintang/DVTObjectMapper.git", .upToNextMajor(from: "4.2.0")),
     ],
 
