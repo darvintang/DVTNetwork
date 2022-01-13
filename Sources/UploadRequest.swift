@@ -35,7 +35,13 @@ import Foundation
 
 /// 上传文件
 open class UploadRequest: Request {
-    public var progress: ProgressBlock?
+    open private(set) var progress: ProgressBlock?
+
+    public convenience init?(_ url: String, parameterEncoding: AFParameterEncoding = AFJSONEncoding.default, header: AFHTTPHeaders, multipart: @escaping (_ formData: AFMultipartFormData) -> Void, progress: @escaping ProgressBlock) {
+        self.init(Session(url), method: .post, parameterEncoding: parameterEncoding, requestUrl: url, headers: header)
+        self.progress = progress
+        self.multipart = multipart
+    }
 
     override open func buildCustomUrlRequest(_ afSeeion: AFSession) {
         self.afRequest = afSeeion.upload(multipartFormData: { [weak self] fdata in
@@ -45,7 +51,9 @@ open class UploadRequest: Request {
         })
     }
 
+    open private(set) var multipart: ((_ formData: AFMultipartFormData) -> Void)?
     open func multipartFormData(_ formData: AFMultipartFormData) {
+        self.multipart?(formData)
     }
 
     /// 发起请求
