@@ -99,7 +99,7 @@ open class Request {
     open func encrypt() -> AFParameters {
         let parameters = self.parameters
         if !parameters.isEmpty {
-            netLoger.info("参数加密：", parameters)
+            netLoger.debug("参数加密：", parameters)
         }
         weak var tempSelf = self
         return self.session.encryptBlock(tempSelf, parameters)
@@ -107,7 +107,7 @@ open class Request {
 
     open func decrypt(_ value: String) -> String {
         if !value.isEmpty {
-            netLoger.info("接口", self.requestUrl, "的返回数据：", value)
+            netLoger.debug("接口", self.requestUrl, "的返回数据：", value)
         }
         weak var tempSelf = self
         return self.session.decryptBlock(tempSelf, value)

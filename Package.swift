@@ -25,13 +25,15 @@ let package = Package(
     ],
 
     targets: [
-        .target(name: "DVTNetwork",
-                dependencies: ["Alamofire", "DVTLoger","DVTObjectMapper"],
-                path: "Sources"
-               ),
-        .testTarget(name: "DVTNetworkTests",
-                    dependencies:["DVTNetwork"]
-                   )
+        .target(
+            name: "DVTNetwork",
+            dependencies: ["Alamofire", "DVTLoger","DVTObjectMapper"],
+            path: "Sources"
+        ),
+        .testTarget(
+            name: "DVTNetworkTests",
+            dependencies:["DVTNetwork"]
+        )
     ],
 
     swiftLanguageVersions: [.v5]
