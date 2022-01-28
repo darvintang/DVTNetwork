@@ -229,14 +229,18 @@ public extension Session {
                 // 在这里可以把结果缓存
                 handleRequest.saveCache(resultValue)
                 self.success(handleRequest, value: resultValue, isCache: false)
-
             case let .failure(error):
-                let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
-                if let failure = request.failure {
-                    failure(handleError)
-                }
-                if let completion = request.completion {
-                    completion(nil, handleError, false)
+                if handleRequest.retry(error) {
+                    self.append(requestOf: handleRequest)
+                    return
+                } else {
+                    let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
+                    if let failure = request.failure {
+                        failure(handleError)
+                    }
+                    if let completion = request.completion {
+                        completion(nil, handleError, false)
+                    }
                 }
         }
         handleRequest.didCompletion(false)

@@ -2,14 +2,14 @@
 //  Request.swift
 //
 //
-//  Created by darvintang on 2021/9/19.
+//  Created by darvin on 2021/9/19.
 //
 
 /*
 
  MIT License
 
- Copyright (c) 2021 darvintang http://blog.tcoding.cn
+ Copyright (c) 2021 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -57,32 +57,21 @@ open class Request {
 
     open private(set) var path: String
 
-    private var _baseUrl: String = ""
-    open var baseUrl: String {
-        if Session.getStringType(self._baseUrl) == .host {
-            return self._baseUrl
-        } else {
-            self._baseUrl = self.session.baseUrl
-        }
-        return self._baseUrl
+    private var _baseUrl: URL?
+    open var baseUrl: URL {
+        self._baseUrl ?? self.session.baseUrl
     }
 
-    private var _requestUrl: String = ""
-    open var requestUrl: String {
-        if Session.getStringType(self._requestUrl) == .url {
-            return self._requestUrl
-        } else {
-            var baseurl = self.baseUrl
-            if baseurl.hasSuffix("/") {
-                baseurl.removeLast()
+    private var _requestUrl: URL?
+    open var requestUrl: URL {
+        if self._requestUrl == nil {
+            var newPath = self.path
+            while newPath.hasPrefix("/") {
+                newPath.removeFirst()
             }
-            var path = self.path
-            if path.hasSuffix("/") {
-                path.removeFirst()
-            }
-            self._requestUrl = baseurl + "/" + path
+            self._requestUrl = self.baseUrl.appendingPathComponent(newPath)
         }
-        return self._requestUrl
+        return self._requestUrl ?? self.baseUrl
     }
 
     // MARK: - 请求参数
@@ -97,9 +86,9 @@ open class Request {
     /// 请求失败的回调
     public var failure: FailureBlock?
     /// 请求完成的回调
-    public var completion: CompleteBlock?
+    public var completion: CompletionBlock?
 
-    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) {
+    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
         self.success = success
         self.failure = failure
         self.completion = completion
@@ -107,9 +96,10 @@ open class Request {
 
     // MARK: - 加解密
 
-    open func encrypt(_ parameters: AFParameters) -> AFParameters {
+    open func encrypt() -> AFParameters {
+        let parameters = self.parameters
         if !parameters.isEmpty {
-            loger.info("参数加密：", parameters)
+            netLoger.debug("参数加密：", parameters)
         }
         weak var tempSelf = self
         return self.session.encryptBlock(tempSelf, parameters)
@@ -117,7 +107,7 @@ open class Request {
 
     open func decrypt(_ value: String) -> String {
         if !value.isEmpty {
-            loger.info("接口", self.requestUrl, "的返回数据：", value)
+            netLoger.debug("接口", self.requestUrl, "的返回数据：", value)
         }
         weak var tempSelf = self
         return self.session.decryptBlock(tempSelf, value)
@@ -129,14 +119,26 @@ open class Request {
         guard let tempSession = session ?? Session.default else {
             return nil
         }
+
+        var newPath = path
+        while newPath.hasPrefix("/") {
+            newPath.removeFirst()
+        }
+        self.path = newPath
+
+        var newBaseUrl = baseUrl
+        while newBaseUrl.hasSuffix("/") {
+            newBaseUrl.removeLast()
+        }
+        self._baseUrl = URL(string: newBaseUrl)
+
+        self._requestUrl = URL(string: requestUrl)
+
         self.session = tempSession
         self.resultType = resultType
         self.method = method
         self.parameterEncoding = parameterEncoding
         self.resultEncoding = resultEncoding
-        self.path = path
-        self._baseUrl = baseUrl
-        self._requestUrl = requestUrl
         self.headers = headers
         self.parameters = parameters
         self.useCache = useCache
@@ -148,30 +150,34 @@ open class Request {
     }
 
     deinit {
-        loger.debug("deinit \(Self.self)")
+        netLoger.debug("deinit \(Self.self)")
     }
 
     open func preOperation(_ value: Any?, error: Error?, isCache: Bool) -> (Any?, Error?) {
         return self.session.preOperationCallBack(self, value, error, isCache)
     }
 
-    /// 即将发起请求
-    open func willStart() {
-        if loger.debugLogLevel == .info {
-            var string = ""
-            string = "开始网络请求<" + self.requestUrl + ">\n"
-
-            if !self.headers.isEmpty {
-                string += "请求头：\n\(self.headers)\n)"
-            }
-            if !self.parameters.isEmpty {
-                string += "请求体：\n\(self.headers)\n)"
-            }
-            loger.info(string)
-        }
+    /// 构造网络请求
+    open func buildCustomUrlRequest(_ afSeeion: AFSession) {
+        self.count += 1
+        self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: self.encrypt(), encoding: self.parameterEncoding, headers: self.session.httpHeaderBlock(self, self.headers))
     }
 
-    open func start(_ completion: CompleteBlock?) {
+    /// 即将发起请求
+    open func willStart() {
+        var string = ""
+        string = "开始网络请求<" + self.requestUrl.absoluteString + ">"
+
+        if !self.headers.isEmpty {
+            string += "\n请求头：\n\(self.headers)"
+        }
+        if !self.parameters.isEmpty {
+            string += "\n请求体：\n\(self.parameters)\n"
+        }
+        netLoger.debug(string)
+    }
+
+    open func start(_ completion: CompletionBlock?) {
         self.start(nil, failure: nil, completion: completion)
     }
 
@@ -180,9 +186,18 @@ open class Request {
     }
 
     /// 发起请求
-    open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) {
+    open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
         self.setRequestBlock(success, failure: failure, completion: completion)
         self.session.append(requestOf: self)
+    }
+
+    public var count = 0
+
+    /// 网络请求错误后是否重试
+    /// - Parameter error: 错误
+    /// - Returns: 是否重试
+    open func retry(_ error: Error) -> Bool {
+        return false
     }
 
     /// 取消请求
@@ -193,7 +208,7 @@ open class Request {
 
     /// 已经结束请求，是否是取消
     open func didCompletion(_ isCancel: Bool) {
-        loger.info("网络请求结束")
+        netLoger.debug("网络请求结束")
     }
 
     // MARK: - 缓存
@@ -204,10 +219,7 @@ open class Request {
     public var cacheTime: TimeInterval
 
     /// 需要忽略的参数名
-    open var cacheIgnoreParameters: [String] = []
-    open var getCacheIgnoreParameters: [String] {
-        self.cacheIgnoreParameters
-    }
+    open private(set) var cacheIgnoreParameters: [String] = []
 
     /// cacheResult
     fileprivate var cacheResult: String?
@@ -276,20 +288,7 @@ private extension Request {
         let parameters = self.parameters.filter({ !self.cacheIgnoreParameters.contains($0.key) }).sorted {
             $0.key.uppercased() > $1.key.uppercased()
         }
-        return self.md5(String(format: "%@%@", self.requestUrl, parameters)) + ".request"
-    }
-}
-
-/// 上传文件
-open class UploadRequest: Request {
-    public var progress: ProgressBlock?
-    open func multipartFormData(_ formData: AFMultipartFormData) {
-    }
-
-    /// 发起请求
-    open func start(_ success: SuccessBlock? = nil, failure: FailureBlock? = nil, progress: ProgressBlock? = nil, completion: CompleteBlock? = nil) {
-        self.progress = progress
-        self.start(success, failure: failure, completion: completion)
+        return self.md5(String(format: "%@%@", self.requestUrl.absoluteString, parameters)) + ".request"
     }
 }
 
@@ -412,7 +411,7 @@ private extension CacheManager {
             do {
                 try data.write(to: URL(fileURLWithPath: "\(self.cacheBasePath)/\(cacheInfo.filePath)"))
             } catch let error {
-                loger.info(error)
+                netLoger.error(error)
                 flag = false
             }
             if flag {
@@ -454,7 +453,7 @@ private extension CacheManager {
     }
 
     static var cacheBasePath: String {
-        let path = (NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first ?? "").appending("/cn.tcoding.Cache.Request")
+        let path = (NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? "").appending("/cn.tcoding.Cache.Request")
         if self.createBaseDirectory(at: path) {
             _ = self.createBaseDirectory(at: path + "/info")
             return path
