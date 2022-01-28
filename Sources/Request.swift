@@ -159,23 +159,22 @@ open class Request {
 
     /// 构造网络请求
     open func buildCustomUrlRequest(_ afSeeion: AFSession) {
+        self.count += 1
         self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: self.encrypt(), encoding: self.parameterEncoding, headers: self.session.httpHeaderBlock(self, self.headers))
     }
 
     /// 即将发起请求
     open func willStart() {
-        if netLoger.debugLogLevel == .info {
-            var string = ""
-            string = "开始网络请求<" + self.requestUrl.absoluteString + ">\n"
+        var string = ""
+        string = "开始网络请求<" + self.requestUrl.absoluteString + ">"
 
-            if !self.headers.isEmpty {
-                string += "请求头：\n\(self.headers)\n)"
-            }
-            if !self.parameters.isEmpty {
-                string += "请求体：\n\(self.headers)\n)"
-            }
-            netLoger.debug(string)
+        if !self.headers.isEmpty {
+            string += "\n请求头：\n\(self.headers)"
         }
+        if !self.parameters.isEmpty {
+            string += "\n请求体：\n\(self.parameters)\n"
+        }
+        netLoger.debug(string)
     }
 
     open func start(_ completion: CompletionBlock?) {
@@ -190,6 +189,15 @@ open class Request {
     open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
         self.setRequestBlock(success, failure: failure, completion: completion)
         self.session.append(requestOf: self)
+    }
+
+    public var count = 0
+
+    /// 网络请求错误后是否重试
+    /// - Parameter error: 错误
+    /// - Returns: 是否重试
+    open func retry(_ error: Error) -> Bool {
+        return false
     }
 
     /// 取消请求
