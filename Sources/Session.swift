@@ -53,7 +53,7 @@ open class Session {
 
     // MARK: - 属性
 
-    public private(set) var baseUrl: URL
+    public private(set) var baseUrl: URL?
     fileprivate let queue: DispatchQueue
     fileprivate var requestsRecord: [String: Request]
     fileprivate var afRequestsRecord: [String: AFRequest]
@@ -94,25 +94,25 @@ open class Session {
     public var httpHeaderBlock: (_ request: Request?, _ header: AFHTTPHeaders) -> AFHTTPHeaders
     public var allowRequestBlock: (_ request: Request) -> Error?
     /// 网络请求结束后，请求状态判断前的操作处理闭包，在这个闭包可以对数据进行提前一步编辑。如果请求成功，在解密操作后执行；如果请求失败不执行解密操作
-    public var preOperationCallBack: (_ request: Request?, _ value: Any?, _ error: Error?, _ isCache: Bool) -> (value: Any?, error: Error?)
+    /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
+    public var preOperationCallBack: OperationCallBack
 
     // MARK: - 初始化
 
-    public init?(_ baseUrl: String) {
-        var newBaseUrl = baseUrl
+    public init(_ baseUrl: String? = nil) {
+        var newBaseUrl = baseUrl ?? ""
         while newBaseUrl.hasSuffix("/") {
             newBaseUrl.removeLast()
         }
-        if let tempBaseUrl = URL(string: newBaseUrl) {
+        if !newBaseUrl.isEmpty, let tempBaseUrl = URL(string: newBaseUrl) {
             self.baseUrl = tempBaseUrl
-        } else {
-            return nil
         }
+
         self.httpHeaderBlock = { $1 }
         self.allowRequestBlock = { _ in nil }
         self.decryptBlock = { $1 }
         self.encryptBlock = { $1 }
-        self.preOperationCallBack = { _, value, error, _ in (value, error) }
+        self.preOperationCallBack = { _, value, error, _ in (false, value, error) }
         self.afSession = AFSession()
         self.maximumConnectionsPerHost = 10
         self.timeoutInterval = 30.0
@@ -145,7 +145,10 @@ public extension Session {
     fileprivate
     func success(_ request: Request, value: String, isCache: Bool) {
         let tempValue = request.decrypt(value)
-        let (handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache)
+        let (ignore, handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache)
+        if ignore {
+            return
+        }
         var resultValue = handleValue
 
         if let resultType = request.resultType {
@@ -156,17 +159,15 @@ public extension Session {
             }
         }
 
-        if let success = request.success, handleError == nil {
-            success(resultValue, isCache)
+        if handleError == nil {
+            request.success?(resultValue, isCache)
         }
 
-        if let failure = request.failure, handleError != nil {
-            failure(handleError)
+        if handleError != nil {
+            request.failure?(handleError)
         }
 
-        if let completion = request.completion {
-            completion(resultValue, handleError, isCache)
-        }
+        request.completion?(resultValue, handleError, isCache)
     }
 
     /// 处理请求结果
@@ -183,6 +184,10 @@ public extension Session {
             return
         }
 
+        defer {
+            handleRequest.didCompletion(false)
+        }
+
         switch result.result {
             case let .success(resultValue):
                 // 在这里可以把结果缓存
@@ -193,16 +198,15 @@ public extension Session {
                     self.append(requestOf: handleRequest)
                     return
                 } else {
-                    let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
-                    if let failure = request.failure {
-                        failure(handleError)
+                    let tuples = handleRequest.preOperation(nil, error: error, isCache: false)
+                    if tuples.ignore {
+                        return
                     }
-                    if let completion = request.completion {
-                        completion(nil, handleError, false)
-                    }
+
+                    request.failure?(tuples.error)
+                    request.completion?(nil, tuples.error, false)
                 }
         }
-        handleRequest.didCompletion(false)
     }
 
     /// 取消该会话的所有请求
@@ -233,7 +237,7 @@ public extension Session {
     /// 添加一个请求，添加后立马执行
     func append(requestOf request: Request) {
         if let error = self.allowRequest(request) {
-            let handleError = request.preOperation(nil, error: error, isCache: false).1
+            let handleError = request.preOperation(nil, error: error, isCache: false).error
             request.failure?(handleError)
             request.completion?(nil, handleError, false)
             return
@@ -269,19 +273,19 @@ public extension Session {
 public extension Session {
     @discardableResult
     static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completion: completion)
+        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, cancel: nil, completion: completion)
     }
 
     @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: success, failure: failure, completion: nil)
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: success, failure: failure, cancel: cancel, completion: nil)
     }
 
     @discardableResult fileprivate
-    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, requestUrl: url, parameters: parameters) {
-            request.setRequestBlock(success, failure: failure, completion: completion)
+            request.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }
@@ -292,19 +296,19 @@ public extension Session {
 
     @discardableResult
     static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completion: completion)
+        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, cancel: nil, completion: completion)
     }
 
     @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: success, failure: failure, completion: nil)
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: success, failure: failure, cancel: cancel, completion: nil)
     }
 
     @discardableResult fileprivate
-    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) -> Request? {
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, path: path, parameters: parameters) {
-            request.setRequestBlock(success, failure: failure, completion: completion)
+            request.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }

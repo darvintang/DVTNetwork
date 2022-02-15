@@ -38,7 +38,7 @@ open class UploadRequest: Request {
     open private(set) var progress: ProgressBlock?
 
     public convenience init?(_ url: String, parameterEncoding: AFParameterEncoding = AFJSONEncoding.default, header: AFHTTPHeaders, multipart: @escaping (_ formData: AFMultipartFormData) -> Void, progress: @escaping ProgressBlock) {
-        self.init(Session(url), method: .post, parameterEncoding: parameterEncoding, requestUrl: url, headers: header)
+        self.init(Session(), method: .post, parameterEncoding: parameterEncoding, requestUrl: url, headers: header)
         self.progress = progress
         self.multipart = multipart
     }

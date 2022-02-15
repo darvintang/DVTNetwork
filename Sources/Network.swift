@@ -46,10 +46,14 @@ public typealias ResultMappable = Mappable
 public typealias SuccessBlock = (_ result: Any?, _ isCache: Bool) -> Void
 /// 网络请求失败的回调
 public typealias FailureBlock = (_ error: Error?) -> Void
-/// 网络请求完成的回调
+/// 网络请求完成的回调，如果是请求被取消，result和error都是nil
 public typealias CompletionBlock = (_ result: Any?, _ error: Error?, _ isCache: Bool) -> Void
 /// 文件上传下载进度的回调
 public typealias ProgressBlock = (_ progress: Progress) -> Void
+/// 网络请求被取消的回调
+public typealias CancelBlock = () -> Void
+/// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
+public typealias OperationCallBack = (_ request: Request?, _ value: Any?, _ error: Error?, _ isCache: Bool) -> (ignore: Bool, value: Any?, error: Error?)
 
 public enum Scheme: String {
     case un
