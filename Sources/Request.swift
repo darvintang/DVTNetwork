@@ -58,7 +58,7 @@ open class Request {
     open private(set) var path: String
 
     private var _baseUrl: URL?
-    open var baseUrl: URL {
+    open var baseUrl: URL? {
         self._baseUrl ?? self.session.baseUrl
     }
 
@@ -69,9 +69,12 @@ open class Request {
             while newPath.hasPrefix("/") {
                 newPath.removeFirst()
             }
-            self._requestUrl = self.baseUrl.appendingPathComponent(newPath)
+            self._requestUrl = self.baseUrl?.appendingPathComponent(newPath)
         }
-        return self._requestUrl ?? self.baseUrl
+        if let url = self._requestUrl {
+            return url
+        }
+        fatalError("url不能为空")
     }
 
     // MARK: - 请求参数
@@ -88,9 +91,12 @@ open class Request {
     /// 请求完成的回调
     public var completion: CompletionBlock?
 
-    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
+    public var cancelBlock: CancelBlock?
+
+    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) {
         self.success = success
         self.failure = failure
+        self.cancelBlock = cancel
         self.completion = completion
     }
 
@@ -153,7 +159,7 @@ open class Request {
         netLoger.debug("deinit \(Self.self)")
     }
 
-    open func preOperation(_ value: Any?, error: Error?, isCache: Bool) -> (Any?, Error?) {
+    open func preOperation(_ value: Any?, error: Error?, isCache: Bool) -> (ignore: Bool, value: Any?, error: Error?) {
         return self.session.preOperationCallBack(self, value, error, isCache)
     }
 
@@ -178,17 +184,25 @@ open class Request {
     }
 
     open func start(_ completion: CompletionBlock?) {
-        self.start(nil, failure: nil, completion: completion)
+        self.start(nil, failure: nil, cancel: nil, completion: completion)
     }
 
-    open func start(_ success: SuccessBlock?, failure: FailureBlock?) {
-        self.start(success, failure: failure, completion: nil)
+    open func start(_ success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) {
+        self.start(success, failure: failure, cancel: cancel, completion: nil)
     }
 
     /// 发起请求
-    open func start(_ success: SuccessBlock?, failure: FailureBlock?, completion: CompletionBlock?) {
-        self.setRequestBlock(success, failure: failure, completion: completion)
+    open func start(_ success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) {
+        self.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
+        self.isCompletion = false
         self.session.append(requestOf: self)
+    }
+
+    /// 重新发起网络请求，必须该请求完成之后
+    open func retry() {
+        if self.isCompletion {
+            self.session.append(requestOf: self)
+        }
     }
 
     public var count = 0
@@ -206,8 +220,15 @@ open class Request {
         self.didCompletion(true)
     }
 
+    private var isCompletion: Bool = false
+
     /// 已经结束请求，是否是取消
     open func didCompletion(_ isCancel: Bool) {
+        self.isCompletion = true
+        if isCancel {
+            self.completion?(nil, nil, false)
+            self.cancelBlock?()
+        }
         netLoger.debug("网络请求结束")
     }
 

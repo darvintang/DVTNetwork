@@ -2,14 +2,14 @@
 //  Network.swift
 //
 //
-//  Created by darvintang on 2021/9/19.
+//  Created by darvin on 2021/9/19.
 //
 
 /*
 
  MIT License
 
- Copyright (c) 2021 darvintang http://blog.tcoding.cn
+ Copyright (c) 2021 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -36,46 +36,24 @@ import Foundation
 
 // 依赖DVTLoger，DVTObjectMapper。如果直接把源码拖到项目中去canImport才有其作用
 
-#if canImport(DVTLoger)
-    import DVTLoger
-    let loger = Loger("network")
-#else
-    struct Loger {
-        func debug(_ value: Any...) {
-        }
+import DVTLoger
+public let netLoger = Loger("cn.tcoding.network", logerName: "DVTNetwork")
 
-        func info(_ value: Any...) {
-        }
-    }
-
-    let loger = Loger()
-#endif
-
-#if canImport(DVTObjectMapper) || canImport(ObjectMapper)
-    #if canImport(DVTObjectMapper)
-        import DVTObjectMapper
-    #else
-        import ObjectMapper
-    #endif
-    public typealias ResultMappable = Mappable
-#else
-    public protocol DVTMappable {
-        init?(JSONString: String)
-        init?(JSON: [String: Any])
-    }
-
-    public typealias ResultMappable = DVTMappable
-    public typealias Map = Any
-#endif
+import DVTObjectMapper
+public typealias ResultMappable = Mappable
 
 /// 网络请求成功的回调
-public typealias SuccessBlock = (Any?, Bool) -> Void
+public typealias SuccessBlock = (_ result: Any?, _ isCache: Bool) -> Void
 /// 网络请求失败的回调
-public typealias FailureBlock = (Error?) -> Void
-/// 网络请求完成的回调
-public typealias CompleteBlock = (Any?, Error?, Bool) -> Void
+public typealias FailureBlock = (_ error: Error?) -> Void
+/// 网络请求完成的回调，如果是请求被取消，result和error都是nil
+public typealias CompletionBlock = (_ result: Any?, _ error: Error?, _ isCache: Bool) -> Void
 /// 文件上传下载进度的回调
-public typealias ProgressBlock = (Progress) -> Void
+public typealias ProgressBlock = (_ progress: Progress) -> Void
+/// 网络请求被取消的回调
+public typealias CancelBlock = () -> Void
+/// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
+public typealias OperationCallBack = (_ request: Request?, _ value: Any?, _ error: Error?, _ isCache: Bool) -> (ignore: Bool, value: Any?, error: Error?)
 
 public enum Scheme: String {
     case un
@@ -91,6 +69,8 @@ public typealias AFRequest = Alamofire.Request
 public typealias AFDataRequest = Alamofire.DataRequest
 public typealias AFDataResponse = Alamofire.DataResponse
 public typealias AFStringDataResponse = Alamofire.AFDataResponse<String>
+
+public typealias AFError = Alamofire.AFError
 
 public typealias AFHTTPMethod = Alamofire.HTTPMethod
 public typealias AFHTTPHeaders = Alamofire.HTTPHeaders

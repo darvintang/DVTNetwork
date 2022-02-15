@@ -2,14 +2,14 @@
 //  Seesion.swift
 //
 //
-//  Created by darvintang on 2021/9/19.
+//  Created by darvin on 2021/9/19.
 //
 
 /*
 
  MIT License
 
- Copyright (c) 2021 darvintang http://blog.tcoding.cn
+ Copyright (c) 2021 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -30,23 +30,11 @@
  THE SOFTWARE.
 
  */
-#if canImport(DVTLoger)
-    import DVTLoger
-#endif
 
+import DVTLoger
 import Foundation
 
-private class SeesionSource {
-    var scheme = Scheme.http
-    var host = ""
-    var baseUrl = ""
-}
-
-public protocol SessionInit {
-    init?(_ scheme: Scheme?, host: String?, baseUrl: String?)
-}
-
-open class Session: SessionInit {
+open class Session {
     fileprivate static var _default: Session?
 
     public static var `default`: Session? {
@@ -65,13 +53,7 @@ open class Session: SessionInit {
 
     // MARK: - 属性
 
-    /// 可带端口号的host校验表达式
-    public static var hostRegular = "[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+\\.?(:[0-9]{0,6}){0,1}"
-    /// url校验表达式
-    public static var urlRegular = "^(https|http)://([\\w-]+\\.)+[\\w-]+(:[0-9]{0,6}){0,1}(/[\\w-./?%&=#]*)?$"
-
-    private let source = SeesionSource()
-
+    public private(set) var baseUrl: URL?
     fileprivate let queue: DispatchQueue
     fileprivate var requestsRecord: [String: Request]
     fileprivate var afRequestsRecord: [String: AFRequest]
@@ -95,7 +77,7 @@ open class Session: SessionInit {
     #if canImport(DVTLoger)
         public var logLevel: LogerLevel {
             didSet {
-                loger.debugLogLevel = self.logLevel
+                netLoger.debugLogLevel = self.logLevel
             }
         }
     #endif
@@ -110,84 +92,63 @@ open class Session: SessionInit {
 
     /// 构造网络请求头的闭包
     public var httpHeaderBlock: (_ request: Request?, _ header: AFHTTPHeaders) -> AFHTTPHeaders
-
+    public var allowRequestBlock: (_ request: Request) -> Error?
     /// 网络请求结束后，请求状态判断前的操作处理闭包，在这个闭包可以对数据进行提前一步编辑。如果请求成功，在解密操作后执行；如果请求失败不执行解密操作
-    public var preOperationCallBack: (_ request: Request?, _ value: Any?, _ error: Error?, _ isCache: Bool) -> (value: Any?, error: Error?)
+    /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
+    public var preOperationCallBack: OperationCallBack
 
     // MARK: - 初始化
 
-    public convenience init?(_ baseUrl: String) {
-        self.init(nil, host: nil, baseUrl: baseUrl)
-    }
-
-    public convenience init?(_ scheme: Scheme, host: String) {
-        self.init(scheme, host: host, baseUrl: nil)
-    }
-
-    public required init?(_ scheme: Scheme?, host: String?, baseUrl: String?) {
-        var isFinishInit = false
-        if let tempBaseUrl = baseUrl {
-            if Self.getStringType(tempBaseUrl) == .url {
-                isFinishInit = true
-            }
-            assert(isFinishInit, "baseUrl格式不正确")
-        } else if let tempScheme = scheme, let tempHost = host {
-            if Self.getStringType(tempHost) == .host, tempScheme != .un {
-                isFinishInit = true
-            }
-            assert(isFinishInit, "host或scheme不正确")
+    public init(_ baseUrl: String? = nil) {
+        var newBaseUrl = baseUrl ?? ""
+        while newBaseUrl.hasSuffix("/") {
+            newBaseUrl.removeLast()
         }
-        if !isFinishInit {
-            return nil
+        if !newBaseUrl.isEmpty, let tempBaseUrl = URL(string: newBaseUrl) {
+            self.baseUrl = tempBaseUrl
         }
 
         self.httpHeaderBlock = { $1 }
+        self.allowRequestBlock = { _ in nil }
         self.decryptBlock = { $1 }
         self.encryptBlock = { $1 }
-        self.preOperationCallBack = { _, value, error, _ in (value, error) }
+        self.preOperationCallBack = { _, value, error, _ in (false, value, error) }
         self.afSession = AFSession()
         self.maximumConnectionsPerHost = 10
         self.timeoutInterval = 30.0
         self.queue = DispatchQueue(label: "cn.tcoding.DVTNetwork.manager.\(UUID().uuidString)")
         self.requestsRecord = [:]
         self.afRequestsRecord = [:]
-
         self.logLevel = .info
+    }
 
-        if let tempBaseUrl = baseUrl {
-            self.baseUrl = tempBaseUrl
-
-        } else if let tempScheme = scheme, let tempHost = host {
-            self.scheme = tempScheme
-            self.host = tempHost
+    @discardableResult
+    public func resetBaseUrl(_ url: String) -> Bool {
+        if let tempUrl = URL(string: url) {
+            self.cancelAll()
+            self.baseUrl = tempUrl
+            return true
         }
+        return false
+    }
+
+    /// 是否允许请求
+    /// - Parameter request: 网络请求对象
+    /// - Returns: 错误信息，如果不允许就返回错误信息
+    open func allowRequest(_ request: Request) -> Error? {
+        return self.allowRequestBlock(request)
     }
 }
 
 /// 请求管理
 public extension Session {
-    /// 构造网络请求
-    fileprivate func buildCustomUrlRequest(_ request: Request) -> AFDataRequest? {
-        var afRequest: AFDataRequest?
-        weak var weakRequest = request
-        let httpHeader = self.httpHeaderBlock(weakRequest, weakRequest?.headers ?? [:])
-        if let tempRequest = request as? UploadRequest {
-            afRequest = self.afSession.upload(multipartFormData: { fdata in
-                (weakRequest as? UploadRequest)?.multipartFormData(fdata)
-            }, to: tempRequest.requestUrl, usingThreshold: UInt64(), method: tempRequest.method, headers: httpHeader).uploadProgress(queue: DispatchQueue.main, closure: { progress in
-                (weakRequest as? UploadRequest)?.progress?(progress)
-            })
-        } else {
-            let parameters = request.parameters
-            afRequest = self.afSession.request(request.requestUrl, method: request.method, parameters: request.encrypt(parameters), encoding: request.parameterEncoding, headers: httpHeader)
-        }
-
-        return afRequest
-    }
-
-    fileprivate func success(_ request: Request, value: String, isCache: Bool) {
+    fileprivate
+    func success(_ request: Request, value: String, isCache: Bool) {
         let tempValue = request.decrypt(value)
-        let (handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache)
+        let (ignore, handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache)
+        if ignore {
+            return
+        }
         var resultValue = handleValue
 
         if let resultType = request.resultType {
@@ -198,21 +159,20 @@ public extension Session {
             }
         }
 
-        if let success = request.success, handleError == nil {
-            success(resultValue, isCache)
+        if handleError == nil {
+            request.success?(resultValue, isCache)
         }
 
-        if let failure = request.failure, handleError != nil {
-            failure(handleError)
+        if handleError != nil {
+            request.failure?(handleError)
         }
 
-        if let completion = request.completion {
-            completion(resultValue, handleError, isCache)
-        }
+        request.completion?(resultValue, handleError, isCache)
     }
 
     /// 处理请求结果
-    fileprivate func handleRequestResult(_ request: Request, result: AFStringDataResponse) {
+    fileprivate
+    func handleRequestResult(_ request: Request, result: AFStringDataResponse) {
         var tempRequest: Request?
         self.queue.sync { [weak self] in
             if let key = request.identifier, !key.isEmpty {
@@ -222,6 +182,10 @@ public extension Session {
         }
         guard let handleRequest = tempRequest else {
             return
+        }
+
+        defer {
+            handleRequest.didCompletion(false)
         }
 
         switch result.result {
@@ -234,16 +198,15 @@ public extension Session {
                     self.append(requestOf: handleRequest)
                     return
                 } else {
-                    let handleError = handleRequest.preOperation(nil, error: error, isCache: false).1
-                    if let failure = request.failure {
-                        failure(handleError)
+                    let tuples = handleRequest.preOperation(nil, error: error, isCache: false)
+                    if tuples.ignore {
+                        return
                     }
-                    if let completion = request.completion {
-                        completion(nil, handleError, false)
-                    }
+
+                    request.failure?(tuples.error)
+                    request.completion?(nil, tuples.error, false)
                 }
         }
-        handleRequest.didCompletion(false)
     }
 
     /// 取消该会话的所有请求
@@ -273,10 +236,22 @@ public extension Session {
 
     /// 添加一个请求，添加后立马执行
     func append(requestOf request: Request) {
-        guard let sendRequest = self.buildCustomUrlRequest(request) else {
+        if let error = self.allowRequest(request) {
+            let handleError = request.preOperation(nil, error: error, isCache: false).error
+            request.failure?(handleError)
+            request.completion?(nil, handleError, false)
             return
         }
-        request.afRequest = sendRequest
+
+        request.buildCustomUrlRequest(self.afSession)
+        guard let sendRequest = request.afRequest as? AFDataRequest else {
+            let error = AFError.createURLRequestFailed(error: NSError(domain: "初始化失败", code: -999, userInfo: nil))
+            request.failure?(error)
+            request.completion?(nil, error, false)
+            return
+        }
+
+        // 将请求添加到任务记录容器
         self.queue.sync { [weak self] in
             if let key = request.identifier, !key.isEmpty {
                 self?.requestsRecord[key] = request
@@ -296,18 +271,21 @@ public extension Session {
 
 /// 通过单例发起请求
 public extension Session {
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompleteBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, completion: completion)
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, cancel: nil, completion: completion)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: success, failure: failure, completion: nil)
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) -> Request? {
+        self.send(method, url: url, parameters: parameters, success: success, failure: failure, cancel: cancel, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
+    @discardableResult fileprivate
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, requestUrl: url, parameters: parameters) {
-            request.setRequestBlock(success, failure: failure, completion: completion)
+            request.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }
@@ -316,18 +294,21 @@ public extension Session {
         return nil
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompleteBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, completion: completion)
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, cancel: nil, completion: completion)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: success, failure: failure, completion: nil)
+    @discardableResult
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) -> Request? {
+        self.send(method, path: path, parameters: parameters, success: success, failure: failure, cancel: cancel, completion: nil)
     }
 
-    @discardableResult static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, completion: CompleteBlock?) -> Request? {
+    @discardableResult fileprivate
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, path: path, parameters: parameters) {
-            request.setRequestBlock(success, failure: failure, completion: completion)
+            request.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }
@@ -346,78 +327,5 @@ private extension Session {
         self.afRequestsRecord.removeAll()
         self.afSession.cancelAllRequests()
         self.afSession = AFSession(configuration: configuration)
-    }
-
-    var scheme: Scheme {
-        get {
-            return self.source.scheme
-        }
-        set {
-            let baseUrl = self.source.baseUrl
-            if baseUrl.isEmpty {
-                self.source.scheme = newValue
-            }
-        }
-    }
-
-    var host: String {
-        get {
-            self.source.host
-        }
-        set {
-            var tempValue = newValue
-
-            if tempValue.hasPrefix("https://"), let range = tempValue.range(of: "https://") { tempValue.removeSubrange(range) }
-            if tempValue.hasPrefix("http://"), let range = tempValue.range(of: "http://") { tempValue.removeSubrange(range) }
-
-            while tempValue.hasSuffix("/") {
-                tempValue.removeLast()
-            }
-
-            self.source.host = tempValue
-        }
-    }
-}
-
-public extension Session {
-    private(set) var baseUrl: String {
-        get {
-            let tempBaseUrl = self.source.baseUrl
-            return tempBaseUrl.isEmpty ? "\(self.scheme.rawValue)://\(self.host)" : tempBaseUrl
-        }
-        set {
-            var tempValue = newValue
-            while tempValue.hasSuffix("/") {
-                tempValue.removeLast()
-            }
-            self.source.baseUrl = tempValue
-        }
-    }
-}
-
-/// 字符串格式校验
-public extension Session {
-    enum StringType {
-        case un
-        case host
-        case url
-    }
-
-    /// 获取字符串的格式类型，url or host
-    /// - Parameter string: 要获取格式的字符串
-    /// - Returns: 返回字符串格式
-    static func getStringType(_ string: String) -> StringType {
-        if self.regularEvaluate(string, regular: self.hostRegular) { return .host }
-        if self.regularEvaluate(string, regular: self.urlRegular) { return .url }
-        return .un
-    }
-
-    /// 正则校验字符串
-    /// - Parameters:
-    ///   - string: 需要校验的字符串
-    ///   - regular: 正则表达式
-    /// - Returns: 结果
-    static func regularEvaluate(_ string: String, regular: String) -> Bool {
-        NSPredicate(format: "SELF MATCHES %@", regular).evaluate(with: string)
     }
 }
