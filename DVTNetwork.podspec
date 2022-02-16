@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'DVTNetwork'
-  s.version          = '1.0.4'
+  s.version          = '1.1'
   s.summary          = 'DVTNetwork'
 
   s.description      = <<-DESC
@@ -22,6 +22,5 @@ Pod::Spec.new do |s|
 
   s.dependency 'Alamofire', '>= 5.4.0'
   s.dependency 'DVTLoger', '>= 1.0.3'
-  s.dependency 'DVTObjectMapper', '>= 4.2.0'
   
 end
