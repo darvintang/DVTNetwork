@@ -83,9 +83,9 @@ open class Request {
     // MARK: - 请求处理
 
     /// 请求完成的回调
-    public var completion: CompletionBlock?
+    public var completion: AnyCompletionBlock?
 
-    public func setRequestBlock(_ completion: @escaping CompletionBlock) {
+    public func setRequestBlock(_ completion: @escaping AnyCompletionBlock) {
         self.completion = completion
     }
 
@@ -94,7 +94,7 @@ open class Request {
     open func encrypt() -> AFParameters {
         let parameters = self.parameters
         if !parameters.isEmpty {
-            netLoger.debug("参数加密：", parameters)
+            NetLoger.debug("参数加密：", parameters)
         }
         weak var tempSelf = self
         return self.session.encryptBlock(tempSelf, parameters)
@@ -102,7 +102,7 @@ open class Request {
 
     open func decrypt(_ value: String) -> String {
         if !value.isEmpty {
-            netLoger.debug("接口", self.requestUrl, "的返回数据：", value)
+            NetLoger.debug("接口", self.requestUrl, "的返回数据：", value)
         }
         weak var tempSelf = self
         return self.session.decryptBlock(tempSelf, value)
@@ -144,7 +144,7 @@ open class Request {
     }
 
     deinit {
-        netLoger.debug("deinit \(Self.self)")
+        NetLoger.debug("deinit \(Self.self)")
     }
 
     open func preOperation(_ result: Any?, error: Error?, isCache: Bool) -> (ignore: Bool, result: Any?, error: Error?) {
@@ -168,11 +168,11 @@ open class Request {
         if !self.parameters.isEmpty {
             string += "\n请求体：\n\(self.parameters)\n"
         }
-        netLoger.debug(string)
+        NetLoger.debug(string)
     }
 
     /// 发起请求
-    open func start(_ completion: CompletionBlock? = nil) {
+    open func start(_ completion: AnyCompletionBlock? = nil) {
         if let tc = completion {
             self.setRequestBlock(tc)
         }
@@ -211,7 +211,7 @@ open class Request {
             }
         }
         self.isCompletion = true
-        netLoger.debug("网络请求结束")
+        NetLoger.debug("网络请求结束")
     }
 
     // MARK: - 缓存
@@ -414,7 +414,7 @@ private extension CacheManager {
             do {
                 try data.write(to: URL(fileURLWithPath: "\(self.cacheBasePath)/\(cacheInfo.filePath)"))
             } catch let error {
-                netLoger.error(error)
+                NetLoger.error(error)
                 flag = false
             }
             if flag {

@@ -35,9 +35,12 @@ import Alamofire
 import Foundation
 
 import DVTLoger
-public let netLoger = Loger("cn.tcoding.network", logerName: "DVTNetwork")
 
-public enum ResultStatus<R, E> {
+public var NetLoger: Loger = {
+    Loger("cn.tcoding.network", logerName: "DVTNetwork")
+}()
+
+public enum ResultStatus<R, E: Error> {
     case success(result: R, isCache: Bool), failure(error: E), cancel
 }
 
@@ -79,9 +82,27 @@ public extension ResultStatus {
         guard case let .failure(error) = self else { return nil }
         return error
     }
+
+    /// 类型转换，请确保数据类型正确
+    func to<T>(_ type: T.Type) -> ResultStatus<T, Error> {
+        switch self {
+            case let .success(result, isCache):
+                if let res = result as? T {
+                    return .success(result: res, isCache: isCache)
+                } else {
+                    return .failure(error: NSError(domain: "数据类型转换失败", code: 9999, userInfo: nil))
+                }
+            case let .failure(error):
+                return .failure(error: error)
+            case .cancel:
+                return .cancel
+        }
+    }
 }
 
-public typealias CompletionBlock = (_ result: ResultStatus<Any, Error>) -> Void
+public typealias CompletionBlock<T> = (_ result: ResultStatus<T, Error>) -> Void
+
+public typealias AnyCompletionBlock = CompletionBlock<Any>
 
 /// 文件上传下载进度的回调
 public typealias ProgressBlock = (_ progress: Progress) -> Void

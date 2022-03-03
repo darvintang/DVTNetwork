@@ -78,14 +78,6 @@ open class Session {
         }
     }
 
-    #if canImport(DVTLoger)
-        public var logLevel: LogerLevel {
-            didSet {
-                netLoger.debugLogLevel = self.logLevel
-            }
-        }
-    #endif
-
     public var useCache = true
 
     /// 加密操作
@@ -99,6 +91,7 @@ open class Session {
     public var allowRequestBlock: (_ request: Request) -> Error?
     /// 网络请求结束后，请求状态判断前的操作处理闭包，在这个闭包可以对数据进行提前一步编辑。如果请求成功，在解密操作后执行；如果请求失败不执行解密操作
     /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
+
     public var preOperationCallBack: OperationCallBack
 
     // MARK: - 初始化
@@ -123,7 +116,6 @@ open class Session {
         self.queue = DispatchQueue(label: "cn.tcoding.DVTNetwork.manager.\(UUID().uuidString)")
         self.requestsRecord = [:]
         self.afRequestsRecord = [:]
-        self.logLevel = .info
 
         self.cacheQueue = DispatchQueue(label: "cn.tcoding.DVTNetwork.manager.cache.\(UUID().uuidString)")
         self.cacheRecord = []
@@ -307,7 +299,7 @@ public extension Session {
 /// 通过单例发起请求
 public extension Session {
     @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: @escaping CompletionBlock) -> Request? {
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: @escaping AnyCompletionBlock) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, requestUrl: url, parameters: parameters) {
             request.setRequestBlock(completion)
@@ -320,7 +312,7 @@ public extension Session {
     }
 
     @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: @escaping CompletionBlock) -> Request? {
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: @escaping AnyCompletionBlock) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, path: path, parameters: parameters) {
             request.setRequestBlock(completion)

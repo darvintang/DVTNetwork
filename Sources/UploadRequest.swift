@@ -57,7 +57,7 @@ open class UploadRequest: Request {
     }
 
     /// 发起请求
-    open func start(_ progress: @escaping ProgressBlock, completion: @escaping CompletionBlock) {
+    open func start(_ progress: @escaping ProgressBlock, completion: @escaping AnyCompletionBlock) {
         self.progress = progress
         self.start(completion)
     }
