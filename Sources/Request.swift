@@ -47,8 +47,6 @@ open class Request {
         }
     }
 
-    /// 在导入了DVTObjectMapper或ObjectMapper后使用
-    open private(set) var resultType: ResultMappable.Type?
     open private(set) var method: AFHTTPMethod = .post
     open private(set) var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
     open private(set) var resultEncoding: String.Encoding = .utf8
@@ -84,19 +82,10 @@ open class Request {
 
     // MARK: - 请求处理
 
-    /// 请求成功的回调
-    public var success: SuccessBlock?
-    /// 请求失败的回调
-    public var failure: FailureBlock?
     /// 请求完成的回调
-    public var completion: CompletionBlock?
+    public var completion: AnyCompletionBlock?
 
-    public var cancelBlock: CancelBlock?
-
-    public func setRequestBlock(_ success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) {
-        self.success = success
-        self.failure = failure
-        self.cancelBlock = cancel
+    public func setRequestBlock(_ completion: @escaping AnyCompletionBlock) {
         self.completion = completion
     }
 
@@ -105,7 +94,7 @@ open class Request {
     open func encrypt() -> AFParameters {
         let parameters = self.parameters
         if !parameters.isEmpty {
-            netLoger.debug("参数加密：", parameters)
+            NetLoger.debug("参数加密：", parameters)
         }
         weak var tempSelf = self
         return self.session.encryptBlock(tempSelf, parameters)
@@ -113,7 +102,7 @@ open class Request {
 
     open func decrypt(_ value: String) -> String {
         if !value.isEmpty {
-            netLoger.debug("接口", self.requestUrl, "的返回数据：", value)
+            NetLoger.debug("接口", self.requestUrl, "的返回数据：", value)
         }
         weak var tempSelf = self
         return self.session.decryptBlock(tempSelf, value)
@@ -121,7 +110,7 @@ open class Request {
 
     // MARK: - 初始化
 
-    public required init?(_ session: Session?, resultType: ResultMappable.Type? = nil, method: AFHTTPMethod = .post, parameterEncoding: AFParameterEncoding = AFURLEncoding.default, resultEncoding: String.Encoding = .utf8, path: String = "", baseUrl: String = "", requestUrl: String = "", headers: AFHTTPHeaders = [:], parameters: AFParameters = [:], useCache: Bool = false, cacheTime: TimeInterval = 7 * 24 * 3600) {
+    public required init?(_ session: Session?, method: AFHTTPMethod = .post, parameterEncoding: AFParameterEncoding = AFURLEncoding.default, resultEncoding: String.Encoding = .utf8, path: String = "", baseUrl: String = "", requestUrl: String = "", headers: AFHTTPHeaders = [:], parameters: AFParameters = [:], useCache: Bool = false, cacheTime: TimeInterval = 7 * 24 * 3600) {
         guard let tempSession = session ?? Session.default else {
             return nil
         }
@@ -141,7 +130,6 @@ open class Request {
         self._requestUrl = URL(string: requestUrl)
 
         self.session = tempSession
-        self.resultType = resultType
         self.method = method
         self.parameterEncoding = parameterEncoding
         self.resultEncoding = resultEncoding
@@ -156,11 +144,11 @@ open class Request {
     }
 
     deinit {
-        netLoger.debug("deinit \(Self.self)")
+        NetLoger.debug("deinit \(Self.self)")
     }
 
-    open func preOperation(_ value: Any?, error: Error?, isCache: Bool) -> (ignore: Bool, value: Any?, error: Error?) {
-        return self.session.preOperationCallBack(self, value, error, isCache)
+    open func preOperation(_ result: Any?, error: Error?, isCache: Bool) -> (ignore: Bool, result: Any?, error: Error?) {
+        return self.session.preOperationCallBack(self, result, error, isCache)
     }
 
     /// 构造网络请求
@@ -180,21 +168,14 @@ open class Request {
         if !self.parameters.isEmpty {
             string += "\n请求体：\n\(self.parameters)\n"
         }
-        netLoger.debug(string)
-    }
-
-    open func start(_ completion: CompletionBlock?) {
-        self.start(nil, failure: nil, cancel: nil, completion: completion)
-    }
-
-    open func start(_ success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) {
-        self.start(success, failure: failure, cancel: cancel, completion: nil)
+        NetLoger.debug(string)
     }
 
     /// 发起请求
-    open func start(_ success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) {
-        self.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
-        self.isCompletion = false
+    open func start(_ completion: AnyCompletionBlock? = nil) {
+        if let tc = completion {
+            self.setRequestBlock(tc)
+        }
         self.session.append(requestOf: self)
     }
 
@@ -220,24 +201,25 @@ open class Request {
         self.didCompletion(true)
     }
 
-    private var isCompletion: Bool = false
+    internal var isCompletion: Bool = false
 
     /// 已经结束请求，是否是取消
     open func didCompletion(_ isCancel: Bool) {
-        self.isCompletion = true
-        if isCancel {
-            self.completion?(nil, nil, false)
-            self.cancelBlock?()
+        if isCancel && !self.isCompletion {
+            DispatchQueue.main.async {
+                self.completion?(.cancel)
+            }
         }
-        netLoger.debug("网络请求结束")
+        self.isCompletion = true
+        NetLoger.debug("网络请求结束")
     }
 
     // MARK: - 缓存
 
     /// 仅httpMethod = .get有效
-    public var useCache = false
+    open private(set) var useCache = false
     /// 接口缓存时间，默认为7天，单位（秒）; 如果超过session的缓存时间无效
-    public var cacheTime: TimeInterval
+    open private(set) var cacheTime: TimeInterval
 
     /// 需要忽略的参数名
     open private(set) var cacheIgnoreParameters: [String] = []
@@ -432,7 +414,7 @@ private extension CacheManager {
             do {
                 try data.write(to: URL(fileURLWithPath: "\(self.cacheBasePath)/\(cacheInfo.filePath)"))
             } catch let error {
-                netLoger.error(error)
+                NetLoger.error(error)
                 flag = false
             }
             if flag {

@@ -55,10 +55,14 @@ open class Session {
 
     public private(set) var baseUrl: URL?
     fileprivate let queue: DispatchQueue
+
     fileprivate var requestsRecord: [String: Request]
     fileprivate var afRequestsRecord: [String: AFRequest]
 
     fileprivate var afSession: AFSession
+
+    fileprivate let cacheQueue: DispatchQueue
+    fileprivate var cacheRecord: [Request]
 
     /// 请求超时时间，修改该参数的时候会取消所有的之前的请求
     public var timeoutInterval: TimeInterval {
@@ -74,14 +78,6 @@ open class Session {
         }
     }
 
-    #if canImport(DVTLoger)
-        public var logLevel: LogerLevel {
-            didSet {
-                netLoger.debugLogLevel = self.logLevel
-            }
-        }
-    #endif
-
     public var useCache = true
 
     /// 加密操作
@@ -95,6 +91,7 @@ open class Session {
     public var allowRequestBlock: (_ request: Request) -> Error?
     /// 网络请求结束后，请求状态判断前的操作处理闭包，在这个闭包可以对数据进行提前一步编辑。如果请求成功，在解密操作后执行；如果请求失败不执行解密操作
     /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
+
     public var preOperationCallBack: OperationCallBack
 
     // MARK: - 初始化
@@ -112,14 +109,16 @@ open class Session {
         self.allowRequestBlock = { _ in nil }
         self.decryptBlock = { $1 }
         self.encryptBlock = { $1 }
-        self.preOperationCallBack = { _, value, error, _ in (false, value, error) }
+        self.preOperationCallBack = { _, result, error, _ in (false, result, error) }
         self.afSession = AFSession()
         self.maximumConnectionsPerHost = 10
         self.timeoutInterval = 30.0
         self.queue = DispatchQueue(label: "cn.tcoding.DVTNetwork.manager.\(UUID().uuidString)")
         self.requestsRecord = [:]
         self.afRequestsRecord = [:]
-        self.logLevel = .info
+
+        self.cacheQueue = DispatchQueue(label: "cn.tcoding.DVTNetwork.manager.cache.\(UUID().uuidString)")
+        self.cacheRecord = []
     }
 
     @discardableResult
@@ -149,25 +148,13 @@ public extension Session {
         if ignore {
             return
         }
-        var resultValue = handleValue
-
-        if let resultType = request.resultType {
-            if let value = handleValue as? String {
-                resultValue = resultType.init(JSONString: value)
-            } else if let value = handleValue as? [String: Any] {
-                resultValue = resultType.init(JSON: value)
-            }
+        if let resultValue = handleValue {
+            request.completion?(.success(result: resultValue, isCache: isCache))
         }
 
-        if handleError == nil {
-            request.success?(resultValue, isCache)
+        if let tError = handleError {
+            request.completion?(.failure(error: tError))
         }
-
-        if handleError != nil {
-            request.failure?(handleError)
-        }
-
-        request.completion?(resultValue, handleError, isCache)
     }
 
     /// 处理请求结果
@@ -184,8 +171,13 @@ public extension Session {
             return
         }
 
+        var retry = false
         defer {
+            // 先结束，再重新发起
             handleRequest.didCompletion(false)
+            if retry {
+                self.append(requestOf: handleRequest)
+            }
         }
 
         switch result.result {
@@ -195,16 +187,14 @@ public extension Session {
                 self.success(handleRequest, value: resultValue, isCache: false)
             case let .failure(error):
                 if handleRequest.retry(error) {
-                    self.append(requestOf: handleRequest)
+                    retry = true
                     return
                 } else {
                     let tuples = handleRequest.preOperation(nil, error: error, isCache: false)
                     if tuples.ignore {
                         return
                     }
-
-                    request.failure?(tuples.error)
-                    request.completion?(nil, tuples.error, false)
+                    request.completion?(.failure(error: tuples.error ?? error))
                 }
         }
     }
@@ -213,6 +203,7 @@ public extension Session {
     func cancelAll() {
         self.queue.async { [weak self] in
             self?.requestsRecord.forEach({ _, request in
+                // 这里不直接调用request.cancel()，原因是request.cancel()会调用cancel(at:)，然后造成死锁
                 request.afRequest?.cancel()
                 request.didCompletion(true)
             })
@@ -223,6 +214,7 @@ public extension Session {
 
     /// 取消指定的请求
     func cancel(at request: Request) {
+        self.cancelCache()
         var tempRequest: Request?
         self.queue.sync { [weak self] in
             if let key = request.identifier, !key.isEmpty {
@@ -236,18 +228,22 @@ public extension Session {
 
     /// 添加一个请求，添加后立马执行
     func append(requestOf request: Request) {
+        request.isCompletion = false
         if let error = self.allowRequest(request) {
-            let handleError = request.preOperation(nil, error: error, isCache: false).error
-            request.failure?(handleError)
-            request.completion?(nil, handleError, false)
+            if let handleError = request.preOperation(nil, error: error, isCache: false).error {
+                DispatchQueue.main.async {
+                    request.completion?(.failure(error: handleError))
+                }
+            }
             return
         }
 
         request.buildCustomUrlRequest(self.afSession)
         guard let sendRequest = request.afRequest as? AFDataRequest else {
             let error = AFError.createURLRequestFailed(error: NSError(domain: "初始化失败", code: -999, userInfo: nil))
-            request.failure?(error)
-            request.completion?(nil, error, false)
+            DispatchQueue.main.async {
+                request.completion?(.failure(error: error))
+            }
             return
         }
 
@@ -261,10 +257,41 @@ public extension Session {
         request.willStart()
         // 在这里读取缓存
         if self.useCache, request.useCache, request.cacheTime > 0, let resultValue = request.cache() {
-            self.success(request, value: resultValue, isCache: true)
+            DispatchQueue.main.async {
+                self.success(request, value: resultValue, isCache: true)
+            }
         }
         sendRequest.validate(statusCode: 200 ..< 300).responseString(encoding: request.resultEncoding) { [weak self] result in
             self?.handleRequestResult(request, result: result)
+        }
+    }
+
+    func appendCache(requestOf request: Request) {
+        self.cacheQueue.sync {
+            self.cacheRecord.append(request)
+        }
+    }
+
+    func startCache() {
+        self.cacheQueue.sync {
+            while !self.cacheRecord.isEmpty {
+                let request = self.cacheRecord.removeFirst()
+                request.start()
+            }
+        }
+        DispatchQueue.main.async {
+            if !self.cacheRecord.isEmpty {
+                self.startCache()
+            }
+        }
+    }
+
+    func cancelCache() {
+        self.cacheQueue.sync {
+            self.cacheRecord.forEach { request in
+                request.didCompletion(true)
+            }
+            self.cacheRecord.removeAll()
         }
     }
 }
@@ -272,20 +299,10 @@ public extension Session {
 /// 通过单例发起请求
 public extension Session {
     @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: nil, failure: nil, cancel: nil, completion: completion)
-    }
-
-    @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) -> Request? {
-        self.send(method, url: url, parameters: parameters, success: success, failure: failure, cancel: cancel, completion: nil)
-    }
-
-    @discardableResult fileprivate
-    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) -> Request? {
+    static func send(_ method: AFHTTPMethod = .post, url: String, parameters: AFParameters = [:], completion: @escaping AnyCompletionBlock) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, requestUrl: url, parameters: parameters) {
-            request.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
+            request.setRequestBlock(completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }
@@ -295,20 +312,10 @@ public extension Session {
     }
 
     @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: CompletionBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: nil, failure: nil, cancel: nil, completion: completion)
-    }
-
-    @discardableResult
-    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?) -> Request? {
-        self.send(method, path: path, parameters: parameters, success: success, failure: failure, cancel: cancel, completion: nil)
-    }
-
-    @discardableResult fileprivate
-    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], success: SuccessBlock?, failure: FailureBlock?, cancel: CancelBlock?, completion: CompletionBlock?) -> Request? {
+    static func send(_ method: AFHTTPMethod = .post, path: String, parameters: AFParameters = [:], completion: @escaping AnyCompletionBlock) -> Request? {
         guard let session = Session.default else { return nil }
         if let request = Request(self.default, method: method, path: path, parameters: parameters) {
-            request.setRequestBlock(success, failure: failure, cancel: cancel, completion: completion)
+            request.setRequestBlock(completion)
             DispatchQueue.main.async {
                 session.append(requestOf: request)
             }

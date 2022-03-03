@@ -57,8 +57,8 @@ open class UploadRequest: Request {
     }
 
     /// 发起请求
-    open func start(_ success: SuccessBlock? = nil, failure: FailureBlock? = nil, progress: ProgressBlock? = nil, completion: CompletionBlock? = nil) {
+    open func start(_ progress: @escaping ProgressBlock, completion: @escaping AnyCompletionBlock) {
         self.progress = progress
-        self.start(success, failure: failure, completion: completion)
+        self.start(completion)
     }
 }

@@ -34,26 +34,80 @@
 import Alamofire
 import Foundation
 
-// 依赖DVTLoger，DVTObjectMapper。如果直接把源码拖到项目中去canImport才有其作用
-
 import DVTLoger
-public let netLoger = Loger("cn.tcoding.network", logerName: "DVTNetwork")
 
-import DVTObjectMapper
-public typealias ResultMappable = Mappable
+public var NetLoger: Loger = {
+    Loger("cn.tcoding.network", logerName: "DVTNetwork")
+}()
 
-/// 网络请求成功的回调
-public typealias SuccessBlock = (_ result: Any?, _ isCache: Bool) -> Void
-/// 网络请求失败的回调
-public typealias FailureBlock = (_ error: Error?) -> Void
-/// 网络请求完成的回调，如果是请求被取消，result和error都是nil
-public typealias CompletionBlock = (_ result: Any?, _ error: Error?, _ isCache: Bool) -> Void
+public enum ResultStatus<R, E: Error> {
+    case success(result: R, isCache: Bool), failure(error: E), cancel
+}
+
+public extension ResultStatus {
+    var isCancel: Bool {
+        if case .cancel = self {
+            return true
+        }
+        return false
+    }
+
+    var isSuccess: Bool {
+        if case .success = self {
+            return true
+        }
+        return false
+    }
+
+    var isCache: Bool {
+        if case let .success(_, isCancel) = self {
+            return isCancel
+        }
+        return false
+    }
+
+    var isFailure: Bool {
+        if case .failure = self {
+            return true
+        }
+        return false
+    }
+
+    var success: R? {
+        guard case let .success(value, _) = self else { return nil }
+        return value
+    }
+
+    var failure: E? {
+        guard case let .failure(error) = self else { return nil }
+        return error
+    }
+
+    /// 类型转换，请确保数据类型正确
+    func to<T>(_ type: T.Type) -> ResultStatus<T, Error> {
+        switch self {
+            case let .success(result, isCache):
+                if let res = result as? T {
+                    return .success(result: res, isCache: isCache)
+                } else {
+                    return .failure(error: NSError(domain: "数据类型转换失败", code: 9999, userInfo: nil))
+                }
+            case let .failure(error):
+                return .failure(error: error)
+            case .cancel:
+                return .cancel
+        }
+    }
+}
+
+public typealias CompletionBlock<T> = (_ result: ResultStatus<T, Error>) -> Void
+
+public typealias AnyCompletionBlock = CompletionBlock<Any>
+
 /// 文件上传下载进度的回调
 public typealias ProgressBlock = (_ progress: Progress) -> Void
-/// 网络请求被取消的回调
-public typealias CancelBlock = () -> Void
 /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
-public typealias OperationCallBack = (_ request: Request?, _ value: Any?, _ error: Error?, _ isCache: Bool) -> (ignore: Bool, value: Any?, error: Error?)
+public typealias OperationCallBack = (_ request: Request?, _ result: Any?, _ error: Error?, _ isCache: Bool) -> (ignore: Bool, result: Any?, error: Error?)
 
 public enum Scheme: String {
     case un
