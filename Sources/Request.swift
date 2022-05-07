@@ -147,7 +147,7 @@ open class Request {
         NetLoger.debug("deinit \(Self.self)")
     }
 
-    open func preOperation(_ result: Any?, error: Error?, isCache: Bool) -> (ignore: Bool, result: Any?, error: Error?) {
+    open func preOperation(_ result: Any?, error: Error?, isCache: Bool) -> (result: Any?, error: Error?)? {
         return self.session.preOperationCallBack(self, result, error, isCache)
     }
 
