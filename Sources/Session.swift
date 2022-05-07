@@ -87,12 +87,18 @@ open class Session {
     public var decryptBlock: (_ request: Request?, _ value: String) -> String
 
     /// 构造网络请求头的闭包
-    public var httpHeaderBlock: (_ request: Request?, _ header: AFHTTPHeaders) -> AFHTTPHeaders
+    public var httpHeaderBlock: HttpHeaderBlock
     public var allowRequestBlock: (_ request: Request) -> Error?
+
+    /// 网络请求拦截过滤，例如鉴权token失效了，在该闭包实现里将请求保存到cache里，等token刷新成功之后再启动
+    ///
+    /// 如果需要拦截请返回`nil`
+    public var filterBlock: (_ request: Request) -> Request?
+
     /// 网络请求结束后，请求状态判断前的操作处理闭包，在这个闭包可以对数据进行提前一步编辑。如果请求成功，在解密操作后执行；如果请求失败不执行解密操作
     /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
 
-    public var preOperationCallBack: OperationCallBack
+    public var preOperationCallBack: OperationCallBackBlock
 
     // MARK: - 初始化
 
@@ -107,9 +113,10 @@ open class Session {
 
         self.httpHeaderBlock = { $1 }
         self.allowRequestBlock = { _ in nil }
+        self.filterBlock = { $0 }
         self.decryptBlock = { $1 }
         self.encryptBlock = { $1 }
-        self.preOperationCallBack = { _, result, error, _ in (false, result, error) }
+        self.preOperationCallBack = { _, result, error, _ in (result, error) }
         self.afSession = AFSession()
         self.maximumConnectionsPerHost = 10
         self.timeoutInterval = 30.0
@@ -144,10 +151,10 @@ public extension Session {
     fileprivate
     func success(_ request: Request, value: String, isCache: Bool) {
         let tempValue = request.decrypt(value)
-        let (ignore, handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache)
-        if ignore {
+        guard let (handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache) else {
             return
         }
+
         if let resultValue = handleValue {
             request.completion?(.success(result: resultValue, isCache: isCache))
         }
@@ -190,8 +197,7 @@ public extension Session {
                     retry = true
                     return
                 } else {
-                    let tuples = handleRequest.preOperation(nil, error: error, isCache: false)
-                    if tuples.ignore {
+                    guard let tuples = handleRequest.preOperation(nil, error: error, isCache: false) else {
                         return
                     }
                     request.completion?(.failure(error: tuples.error ?? error))
@@ -228,9 +234,13 @@ public extension Session {
 
     /// 添加一个请求，添加后立马执行
     func append(requestOf request: Request) {
+        guard let request = self.filterBlock(request) else {
+            return
+        }
+
         request.isCompletion = false
         if let error = self.allowRequest(request) {
-            if let handleError = request.preOperation(nil, error: error, isCache: false).error {
+            if let handleError = request.preOperation(nil, error: error, isCache: false)?.error {
                 DispatchQueue.main.async {
                     request.completion?(.failure(error: handleError))
                 }

@@ -100,14 +100,16 @@ public extension ResultStatus {
     }
 }
 
+public typealias HttpHeaderBlock = (_ request: Request?, _ header: AFHTTPHeaders) -> AFHTTPHeaders
+
 public typealias CompletionBlock<T> = (_ result: ResultStatus<T, Error>) -> Void
 
 public typealias AnyCompletionBlock = CompletionBlock<Any>
 
 /// 文件上传下载进度的回调
 public typealias ProgressBlock = (_ progress: Progress) -> Void
-/// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
-public typealias OperationCallBack = (_ request: Request?, _ result: Any?, _ error: Error?, _ isCache: Bool) -> (ignore: Bool, result: Any?, error: Error?)
+/// 是否忽略本次结果，如果忽略就不会走请求结果的闭包， 返回空
+public typealias OperationCallBackBlock = (_ request: Request, _ result: Any?, _ error: Error?, _ isCache: Bool) -> (result: Any?, error: Error?)?
 
 public enum Scheme: String {
     case un
