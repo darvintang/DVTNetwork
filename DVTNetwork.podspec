@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'DVTNetwork'
-  s.version          = '1.1.2'
+  s.version          = '1.2'
   s.summary          = 'DVTNetwork'
 
   s.description      = <<-DESC
@@ -12,15 +12,15 @@ Pod::Spec.new do |s|
   s.author           = { 'xt-input' => 'input@tcoding.cn' }
   s.source           = { :git => 'https://github.com/darvintang/DVTNetwork.git', :tag => s.version.to_s }
 
-  s.ios.deployment_target = '10.0'
-  s.osx.deployment_target = '10.12'
+  s.ios.deployment_target = '12.0'
+  s.osx.deployment_target = '10.14'
 
   s.source_files = 'Sources/**/*.swift'
 
   s.swift_version = '5'
   s.requires_arc  = true
 
-  s.dependency 'Alamofire', '>= 5.4.0'
-  s.dependency 'DVTLoger', '>= 1.1'
+  s.dependency 'Alamofire', '>= 5.6.0'
+  s.dependency 'DVTLoger', '>= 1.2'
   
 end
