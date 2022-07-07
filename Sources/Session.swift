@@ -286,7 +286,10 @@ public extension Session {
         self.cacheQueue.sync {
             while !self.cacheRecord.isEmpty {
                 let request = self.cacheRecord.removeFirst()
-                request.start()
+                // 如果不切换到其它线程然后在filterBlock(request)、allowRequest(request)里直接把请求插入到缓存会造成线程死锁
+                DispatchQueue.main.async {
+                    request.start()
+                }
             }
         }
         DispatchQueue.main.async {
