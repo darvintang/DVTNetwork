@@ -99,6 +99,8 @@ open class Session {
     /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
 
     public var preOperationCallBack: OperationCallBackBlock
+    /// 参数签名，在构建请求的时候调用，返回参数签名的key和value
+    public var signatureBlock: SignatureBlock
 
     // MARK: - 初始化
 
@@ -117,6 +119,7 @@ open class Session {
         self.decryptBlock = { $1 }
         self.encryptBlock = { $1 }
         self.preOperationCallBack = { _, result, error, _ in (result, error) }
+        self.signatureBlock = { _ in nil }
         self.afSession = AFSession()
         self.maximumConnectionsPerHost = 10
         self.timeoutInterval = 30.0

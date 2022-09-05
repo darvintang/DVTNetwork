@@ -110,6 +110,8 @@ public typealias AnyCompletionBlock = CompletionBlock<Any>
 public typealias ProgressBlock = (_ progress: Progress) -> Void
 /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包， 返回空
 public typealias OperationCallBackBlock = (_ request: Request, _ result: Any?, _ error: Error?, _ isCache: Bool) -> (result: Any?, error: Error?)?
+/// 返回参数签名的key和value
+public typealias SignatureBlock = (_ parameters: AFParameters) -> (key: String, value: String)?
 
 public enum Scheme: String {
     case un

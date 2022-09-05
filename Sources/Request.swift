@@ -1,6 +1,6 @@
 //
 //  Request.swift
-//
+//  DVTNetwork
 //
 //  Created by darvin on 2021/9/19.
 //
@@ -9,7 +9,7 @@
 
  MIT License
 
- Copyright (c) 2021 darvin http://blog.tcoding.cn
+ Copyright (c) 2022 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -151,10 +151,22 @@ open class Request {
         return self.session.preOperationCallBack(self, result, error, isCache)
     }
 
+    /// 参数签名，在构建请求的时候调用，返回参数签名的key和value
+    open func signature(_ parameters: AFParameters) -> (key: String, value: String)? {
+        return self.session.signatureBlock(parameters)
+    }
+
     /// 构造网络请求
     open func buildCustomUrlRequest(_ afSeeion: AFSession) {
         self.count += 1
-        self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: self.encrypt(), encoding: self.parameterEncoding, headers: self.session.httpHeaderBlock(self, self.headers))
+
+        let parameters = self.encrypt()
+        var headers = self.session.httpHeaderBlock(self, self.headers)
+
+        if let sign = self.signature(parameters) {
+            headers.add(name: sign.key, value: sign.value)
+        }
+        self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: parameters, encoding: self.parameterEncoding, headers: headers)
     }
 
     /// 即将发起请求
