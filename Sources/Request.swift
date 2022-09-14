@@ -152,10 +152,12 @@ open class Request {
     }
 
     /// 参数签名，在构建请求的时候调用，返回参数签名的key和value
-    open func signature(_ parameters: AFParameters) -> (key: String, value: String)? {
-        return self.session.signatureBlock(parameters)
+    open func signature(_ headers: AFHTTPHeaders, parameters: AFParameters) -> (key: String, value: String)? {
+        return self.session.signatureBlock(headers, parameters)
     }
 
+    public var requestHeaders: AFHTTPHeaders = [:]
+    public var requestParameters: AFParameters = [:]
     /// 构造网络请求
     open func buildCustomUrlRequest(_ afSeeion: AFSession) {
         self.count += 1
@@ -163,10 +165,12 @@ open class Request {
         let parameters = self.encrypt()
         var headers = self.session.httpHeaderBlock(self, self.headers)
 
-        if let sign = self.signature(parameters) {
+        if let sign = self.signature(headers, parameters: parameters) {
             headers.add(name: sign.key, value: sign.value)
         }
         self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: parameters, encoding: self.parameterEncoding, headers: headers)
+        self.requestHeaders = headers
+        self.requestParameters = parameters
     }
 
     /// 即将发起请求
@@ -174,11 +178,11 @@ open class Request {
         var string = ""
         string = "开始网络请求<" + self.requestUrl.absoluteString + ">"
 
-        if !self.headers.isEmpty {
-            string += "\n请求头：\n\(self.headers)"
+        if !self.requestHeaders.isEmpty {
+            string += "\n请求头：\n\(self.requestHeaders)"
         }
-        if !self.parameters.isEmpty {
-            string += "\n请求体：\n\(self.parameters)\n"
+        if !self.requestParameters.isEmpty {
+            string += "\n请求体：\n\(self.requestParameters)\n"
         }
         NetLoger.debug(string)
     }

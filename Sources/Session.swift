@@ -119,7 +119,7 @@ open class Session {
         self.decryptBlock = { $1 }
         self.encryptBlock = { $1 }
         self.preOperationCallBack = { _, result, error, _ in (result, error) }
-        self.signatureBlock = { _ in nil }
+        self.signatureBlock = { _, _ in nil }
         self.afSession = AFSession()
         self.maximumConnectionsPerHost = 10
         self.timeoutInterval = 30.0

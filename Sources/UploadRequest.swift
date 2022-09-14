@@ -37,18 +37,29 @@ import Foundation
 open class UploadRequest: Request {
     open private(set) var progress: ProgressBlock?
 
-    public convenience init?(_ url: String, parameterEncoding: AFParameterEncoding = AFJSONEncoding.default, header: AFHTTPHeaders, multipart: @escaping (_ formData: AFMultipartFormData) -> Void, progress: @escaping ProgressBlock) {
-        self.init(Session(), method: .post, parameterEncoding: parameterEncoding, requestUrl: url, headers: header)
+    public convenience init?(_ url: String, session: Session? = Session.default, parameterEncoding: AFParameterEncoding = AFJSONEncoding.default, header: AFHTTPHeaders, multipart: @escaping (_ formData: AFMultipartFormData) -> Void, progress: @escaping ProgressBlock) {
+        self.init(session, method: .post, parameterEncoding: parameterEncoding, requestUrl: url, headers: header)
         self.progress = progress
         self.multipart = multipart
     }
 
     override open func buildCustomUrlRequest(_ afSeeion: AFSession) {
+        self.count += 1
+
+        let parameters = self.encrypt()
+        var headers = self.session.httpHeaderBlock(self, self.headers)
+
+        if let sign = self.signature(headers, parameters: parameters) {
+            headers.add(name: sign.key, value: sign.value)
+        }
+
         self.afRequest = afSeeion.upload(multipartFormData: { [weak self] fdata in
             self?.multipartFormData(fdata)
-        }, to: self.requestUrl, usingThreshold: UInt64(), method: self.method, headers: self.session.httpHeaderBlock(self, self.headers)).uploadProgress(queue: DispatchQueue.main, closure: { [weak self] progress in
+        }, to: self.requestUrl, usingThreshold: UInt64(), method: self.method, headers: headers).uploadProgress(queue: DispatchQueue.main, closure: { [weak self] progress in
             self?.progress?(progress)
         })
+        self.requestHeaders = headers
+        self.requestParameters = parameters
     }
 
     open private(set) var multipart: ((_ formData: AFMultipartFormData) -> Void)?
