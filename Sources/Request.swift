@@ -39,7 +39,7 @@ import var CommonCrypto.CC_MD5_DIGEST_LENGTH
 
 open class Request {
     public let session: Session
-
+    private let id = UUID().uuidString
     public private(set) var identifier: String?
     public weak var afRequest: AFRequest? {
         didSet {
@@ -281,6 +281,12 @@ open class Request {
             return value
         }
         return nil
+    }
+}
+
+extension Request: Equatable {
+    public static func == (lhs: Request, rhs: Request) -> Bool {
+        lhs.id == rhs.id
     }
 }
 

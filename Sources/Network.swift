@@ -1,6 +1,6 @@
 //
 //  Network.swift
-//
+//  DVTNetwork
 //
 //  Created by darvin on 2021/9/19.
 //
@@ -9,7 +9,7 @@
 
  MIT License
 
- Copyright (c) 2021 darvin http://blog.tcoding.cn
+ Copyright (c) 2022 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -114,7 +114,6 @@ public typealias OperationCallBackBlock = (_ request: Request, _ result: Any?, _
 public typealias SignatureBlock = (_ headers: AFHTTPHeaders, _ parameters: AFParameters) -> (key: String, value: String)?
 
 public enum Scheme: String {
-    case un
     case http
     case https
 }

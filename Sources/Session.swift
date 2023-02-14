@@ -1,6 +1,6 @@
 //
 //  Seesion.swift
-//
+//  DVTNetwork
 //
 //  Created by darvin on 2021/9/19.
 //
@@ -9,7 +9,7 @@
 
  MIT License
 
- Copyright (c) 2021 darvin http://blog.tcoding.cn
+ Copyright (c) 2022 darvin http://blog.tcoding.cn
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -97,7 +97,6 @@ open class Session {
 
     /// 网络请求结束后，请求状态判断前的操作处理闭包，在这个闭包可以对数据进行提前一步编辑。如果请求成功，在解密操作后执行；如果请求失败不执行解密操作
     /// 是否忽略本次结果，如果忽略就不会走请求结果的闭包 ignore
-
     public var preOperationCallBack: OperationCallBackBlock
     /// 参数签名，在构建请求的时候调用，返回参数签名的key和value
     public var signatureBlock: SignatureBlock
@@ -223,13 +222,15 @@ public extension Session {
 
     /// 取消指定的请求
     func cancel(at request: Request) {
-        self.cancelCache()
         var tempRequest: Request?
         self.queue.sync { [weak self] in
             if let key = request.identifier, !key.isEmpty {
                 tempRequest = self?.requestsRecord.removeValue(forKey: key)
                 self?.afRequestsRecord.removeValue(forKey: key)
             }
+        }
+        self.cacheQueue.sync {
+            self.cacheRecord.removeAll(where: { $0 == request })
         }
         tempRequest?.afRequest?.cancel()
         tempRequest?.didCompletion(true)

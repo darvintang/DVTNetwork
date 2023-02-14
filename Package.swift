@@ -5,16 +5,14 @@ import PackageDescription
 
 let package = Package(name: "DVTNetwork",
 
-                      platforms: [.macOS(.v10_12),
-                                  .iOS(.v10),
-                                  .tvOS(.v10),
-                                  .watchOS(.v3)],
+                      platforms: [.macOS(.v11),
+                                  .iOS(.v13)],
 
                       products: [.library(name: "DVTNetwork",
                                           targets: ["DVTNetwork"]),],
 
-                      dependencies: [.package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.4.0")),
-                                     .package(url: "https://github.com/darvintang/DVTLoger.git", .upToNextMajor(from: "1.0.0")),
+                      dependencies: [.package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.6.0")),
+                                     .package(url: "https://github.com/darvintang/DVTLoger.git", .upToNextMajor(from: "2.0.0")),
                                      .package(url: "https://github.com/darvintang/DVTObjectMapper.git", .upToNextMajor(from: "4.2.0")),
                                     ],
 
