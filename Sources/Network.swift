@@ -31,10 +31,9 @@
 
  */
 
+import DVTLoger
 import Alamofire
 import Foundation
-
-import DVTLoger
 
 public var NetLoger: Loger = {
     Loger("cn.tcoding.network", logerName: "DVTNetwork")

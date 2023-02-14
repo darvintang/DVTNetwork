@@ -35,15 +35,22 @@ import Foundation
 
 /// 上传文件
 open class UploadRequest: Request {
-    open private(set) var progress: ProgressBlock?
-
-    public convenience init?(_ url: String, session: Session? = Session.default, parameterEncoding: AFParameterEncoding = AFJSONEncoding.default, header: AFHTTPHeaders, multipart: @escaping (_ formData: AFMultipartFormData) -> Void, progress: @escaping ProgressBlock) {
-        self.init(session, method: .post, parameterEncoding: parameterEncoding, requestUrl: url, headers: header)
+    // MARK: Lifecycle
+    public convenience init?(_ url: String, session: Session? = Session.default,
+                             parameterEncoding: AFParameterEncoding = AFJSONEncoding.default, header: AFHTTPHeaders,
+                             multipart: @escaping (_ formData: AFMultipartFormData) -> Void,
+                             progress: @escaping ProgressBlock) {
+        self.init(session, method: .post, parameterEncoding: parameterEncoding, requestURL: url, headers: header)
         self.progress = progress
         self.multipart = multipart
     }
 
-    override open func buildCustomUrlRequest(_ afSeeion: AFSession) {
+    // MARK: Open
+    open private(set) var progress: ProgressBlock?
+
+    open private(set) var multipart: ((_ formData: AFMultipartFormData) -> Void)?
+
+    override open func buildCustomURLRequest(_ afSeeion: AFSession) {
         self.count += 1
 
         let parameters = self.encrypt()
@@ -55,14 +62,15 @@ open class UploadRequest: Request {
 
         self.afRequest = afSeeion.upload(multipartFormData: { [weak self] fdata in
             self?.multipartFormData(fdata)
-        }, to: self.requestUrl, usingThreshold: UInt64(), method: self.method, headers: headers).uploadProgress(queue: DispatchQueue.main, closure: { [weak self] progress in
-            self?.progress?(progress)
-        })
+        }, to: self.requestURL, usingThreshold: UInt64(), method: self.method,
+        headers: headers).uploadProgress(queue: DispatchQueue.main,
+                                         closure: { [weak self] progress in
+                                             self?.progress?(progress)
+                                         })
         self.requestHeaders = headers
         self.requestParameters = parameters
     }
 
-    open private(set) var multipart: ((_ formData: AFMultipartFormData) -> Void)?
     open func multipartFormData(_ formData: AFMultipartFormData) {
         self.multipart?(formData)
     }

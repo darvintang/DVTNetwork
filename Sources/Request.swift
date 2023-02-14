@@ -32,85 +32,15 @@
  */
 
 import Foundation
-
 import typealias CommonCrypto.CC_LONG
-import func CommonCrypto.CC_MD5
-import var CommonCrypto.CC_MD5_DIGEST_LENGTH
+import func CommonCrypto.CC_SHA256
+import var CommonCrypto.CC_SHA256_DIGEST_LENGTH
 
 open class Request {
-    public let session: Session
-    private let id = UUID().uuidString
-    public private(set) var identifier: String?
-    public weak var afRequest: AFRequest? {
-        didSet {
-            self.identifier = self.afRequest?.id.uuidString
-        }
-    }
-
-    open private(set) var method: AFHTTPMethod = .post
-    open private(set) var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
-    open private(set) var resultEncoding: String.Encoding = .utf8
-
-    // MARK: - 请求路径
-
-    open private(set) var path: String
-
-    private var _baseUrl: URL?
-    open var baseUrl: URL? {
-        self._baseUrl ?? self.session.baseUrl
-    }
-
-    private var _requestUrl: URL?
-    open var requestUrl: URL {
-        if self._requestUrl == nil {
-            var newPath = self.path
-            while newPath.hasPrefix("/") {
-                newPath.removeFirst()
-            }
-            self._requestUrl = self.baseUrl?.appendingPathComponent(newPath)
-        }
-        if let url = self._requestUrl {
-            return url
-        }
-        fatalError("url不能为空")
-    }
-
-    // MARK: - 请求参数
-
-    open private(set) var headers: AFHTTPHeaders = [:]
-    open private(set) var parameters: AFParameters = [:]
-
-    // MARK: - 请求处理
-
-    /// 请求完成的回调
-    public var completion: AnyCompletionBlock?
-
-    public func setRequestBlock(_ completion: @escaping AnyCompletionBlock) {
-        self.completion = completion
-    }
-
-    // MARK: - 加解密
-
-    open func encrypt() -> AFParameters {
-        let parameters = self.parameters
-        if !parameters.isEmpty {
-            NetLoger.debug("参数加密：", parameters)
-        }
-        weak var tempSelf = self
-        return self.session.encryptBlock(tempSelf, parameters)
-    }
-
-    open func decrypt(_ value: String) -> String {
-        if !value.isEmpty {
-            NetLoger.debug("接口", self.requestUrl, "的返回数据：", value)
-        }
-        weak var tempSelf = self
-        return self.session.decryptBlock(tempSelf, value)
-    }
-
-    // MARK: - 初始化
-
-    public required init?(_ session: Session?, method: AFHTTPMethod = .post, parameterEncoding: AFParameterEncoding = AFURLEncoding.default, resultEncoding: String.Encoding = .utf8, path: String = "", baseUrl: String = "", requestUrl: String = "", headers: AFHTTPHeaders = [:], parameters: AFParameters = [:], useCache: Bool = false, cacheTime: TimeInterval = 7 * 24 * 3600) {
+    // MARK: Lifecycle
+    public required init?(_ session: Session?, method: AFHTTPMethod = .post, parameterEncoding: AFParameterEncoding = AFURLEncoding.default,
+                          resultEncoding: String.Encoding = .utf8, path: String = "", baseURL: String = "", requestURL: String = "",
+                          headers: AFHTTPHeaders = [:], parameters: AFParameters = [:], useCache: Bool = false, cacheTime: TimeInterval = 7 * 24 * 3600) {
         guard let tempSession = session ?? Session.default else {
             return nil
         }
@@ -121,13 +51,13 @@ open class Request {
         }
         self.path = newPath
 
-        var newBaseUrl = baseUrl
-        while newBaseUrl.hasSuffix("/") {
-            newBaseUrl.removeLast()
+        var newBaseURL = baseURL
+        while newBaseURL.hasSuffix("/") {
+            newBaseURL.removeLast()
         }
-        self._baseUrl = URL(string: newBaseUrl)
+        self._baseURL = URL(string: newBaseURL)
 
-        self._requestUrl = URL(string: requestUrl)
+        self._requestURL = URL(string: requestURL)
 
         self.session = tempSession
         self.method = method
@@ -147,6 +77,69 @@ open class Request {
         NetLoger.debug("deinit \(Self.self)")
     }
 
+    // MARK: Open
+    open private(set) var method: AFHTTPMethod = .post
+    open private(set) var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
+    open private(set) var resultEncoding: String.Encoding = .utf8
+
+    // MARK: - 请求路径
+
+    open private(set) var path: String
+
+    // MARK: - 请求参数
+
+    open private(set) var headers: AFHTTPHeaders = [:]
+    open private(set) var parameters: AFParameters = [:]
+
+    // MARK: - 缓存
+
+    /// 仅httpMethod = .get有效
+    open private(set) var useCache = false
+    /// 接口缓存时间，默认为7天，单位（秒）; 如果超过session的缓存时间无效
+    open private(set) var cacheTime: TimeInterval
+
+    /// 需要忽略的参数名
+    open private(set) var cacheIgnoreParameters: [String] = []
+
+    open var baseURL: URL? {
+        self._baseURL ?? self.session.baseURL
+    }
+
+    open var requestURL: URL {
+        if self._requestURL == nil {
+            var newPath = self.path
+            while newPath.hasPrefix("/") {
+                newPath.removeFirst()
+            }
+            self._requestURL = self.baseURL?.appendingPathComponent(newPath)
+        }
+        if let url = self._requestURL {
+            return url
+        }
+        fatalError("url不能为空")
+    }
+
+    /// 请求缓存的相对路径
+    open var cacheFliePath: String {
+        "\(self.cacheFolder())/\(self.cacheFileName)"
+    }
+
+    // MARK: - 加解密
+
+    open func encrypt() -> AFParameters {
+        let parameters = self.parameters
+        if !parameters.isEmpty {
+            NetLoger.debug("参数加密：", parameters)
+        }
+        weak var tempSelf = self
+        return self.session.encryptBlock(tempSelf, parameters)
+    }
+
+    open func decrypt(_ value: String) -> String {
+        weak var tempSelf = self
+        return self.session.decryptBlock(tempSelf, value)
+    }
+
     open func preOperation(_ result: Any?, error: Error?, isCache: Bool) -> (result: Any?, error: Error?)? {
         return self.session.preOperationCallBack(self, result, error, isCache)
     }
@@ -156,10 +149,8 @@ open class Request {
         return self.session.signatureBlock(headers, parameters)
     }
 
-    public var requestHeaders: AFHTTPHeaders = [:]
-    public var requestParameters: AFParameters = [:]
     /// 构造网络请求
-    open func buildCustomUrlRequest(_ afSeeion: AFSession) {
+    open func buildCustomURLRequest(_ afSeeion: AFSession) {
         self.count += 1
 
         let parameters = self.encrypt()
@@ -168,7 +159,7 @@ open class Request {
         if let sign = self.signature(headers, parameters: parameters) {
             headers.add(name: sign.key, value: sign.value)
         }
-        self.afRequest = afSeeion.request(self.requestUrl, method: self.method, parameters: parameters, encoding: self.parameterEncoding, headers: headers)
+        self.afRequest = afSeeion.request(self.requestURL, method: self.method, parameters: parameters, encoding: self.parameterEncoding, headers: headers)
         self.requestHeaders = headers
         self.requestParameters = parameters
     }
@@ -176,7 +167,7 @@ open class Request {
     /// 即将发起请求
     open func willStart() {
         var string = ""
-        string = "开始网络请求<" + self.requestUrl.absoluteString + ">"
+        string = "开始网络请求<" + self.requestURL.absoluteString + ">"
 
         if !self.requestHeaders.isEmpty {
             string += "\n请求头：\n\(self.requestHeaders)"
@@ -202,8 +193,6 @@ open class Request {
         }
     }
 
-    public var count = 0
-
     /// 网络请求错误后是否重试
     /// - Parameter error: 错误
     /// - Returns: 是否重试
@@ -217,11 +206,9 @@ open class Request {
         self.didCompletion(true)
     }
 
-    internal var isCompletion: Bool = false
-
     /// 已经结束请求，是否是取消
     open func didCompletion(_ isCancel: Bool) {
-        if isCancel && !self.isCompletion {
+        if isCancel, !self.isCompletion {
             DispatchQueue.main.async {
                 self.completion?(.cancel)
             }
@@ -230,29 +217,33 @@ open class Request {
         NetLoger.debug("网络请求结束")
     }
 
-    // MARK: - 缓存
-
-    /// 仅httpMethod = .get有效
-    open private(set) var useCache = false
-    /// 接口缓存时间，默认为7天，单位（秒）; 如果超过session的缓存时间无效
-    open private(set) var cacheTime: TimeInterval
-
-    /// 需要忽略的参数名
-    open private(set) var cacheIgnoreParameters: [String] = []
-
-    /// cacheResult
-    fileprivate var cacheResult: String?
-    fileprivate var cacheCreateTime: Date?
-
     /// 针对多用户的接口缓存作用，可以用用户名等字段来分辨
     /// - Returns: 文件夹名
     open func cacheFolder() -> String {
         return "\(self.self)"
     }
 
-    /// 请求缓存的相对路径
-    open var cacheFliePath: String {
-        "\(self.cacheFolder())/\(self.cacheFileName)"
+    // MARK: Public
+    public let session: Session
+    public private(set) var identifier: String?
+
+    // MARK: - 请求处理
+
+    /// 请求完成的回调
+    public var completion: AnyCompletionBlock?
+
+    public var requestHeaders: AFHTTPHeaders = [:]
+    public var requestParameters: AFParameters = [:]
+    public var count = 0
+
+    public weak var afRequest: AFRequest? {
+        didSet {
+            self.identifier = self.afRequest?.id.uuidString
+        }
+    }
+
+    public func setRequestBlock(_ completion: @escaping AnyCompletionBlock) {
+        self.completion = completion
     }
 
     public func saveCache(_ value: String) {
@@ -282,6 +273,19 @@ open class Request {
         }
         return nil
     }
+
+    // MARK: Internal
+    internal var isCompletion = false
+
+    // MARK: Fileprivate
+    /// cacheResult
+    fileprivate var cacheResult: String?
+    fileprivate var cacheCreateTime: Date?
+
+    // MARK: Private
+    private let id = UUID().uuidString
+    private var _baseURL: URL?
+    private var _requestURL: URL?
 }
 
 extension Request: Equatable {
@@ -292,8 +296,15 @@ extension Request: Equatable {
 
 /// cache路径相关
 private extension Request {
-    func md5(_ string: String) -> String {
-        let length = Int(CC_MD5_DIGEST_LENGTH)
+    var cacheFileName: String {
+        let parameters = self.parameters.filter { !self.cacheIgnoreParameters.contains($0.key) }.sorted {
+            $0.key.uppercased() > $1.key.uppercased()
+        }
+        return self.sha256(String(format: "%@%@", self.requestURL.absoluteString, parameters)) + ".request"
+    }
+
+    func sha256(_ string: String) -> String {
+        let length = Int(CC_SHA256_DIGEST_LENGTH)
         let messageData = string.data(using: .utf8)!
         var digestData = Data(count: length)
 
@@ -301,35 +312,37 @@ private extension Request {
             messageData.withUnsafeBytes { messageBytes -> UInt8 in
                 if let messageBytesBaseAddress = messageBytes.baseAddress, let digestBytesBlindMemory = digestBytes.bindMemory(to: UInt8.self).baseAddress {
                     let messageLength = CC_LONG(messageData.count)
-                    CC_MD5(messageBytesBaseAddress, messageLength, digestBytesBlindMemory)
+                    CC_SHA256(messageBytesBaseAddress, messageLength, digestBytesBlindMemory)
                 }
                 return 0
             }
         }
         return digestData.map { String(format: "%02hhx", $0) }.joined().uppercased()
     }
-
-    var cacheFileName: String {
-        let parameters = self.parameters.filter({ !self.cacheIgnoreParameters.contains($0.key) }).sorted {
-            $0.key.uppercased() > $1.key.uppercased()
-        }
-        return self.md5(String(format: "%@%@", self.requestUrl.absoluteString, parameters)) + ".request"
-    }
 }
 
 private class RequestCacheInfo: Codable {
-    let filePath: String
-    let infoFilePath: String
-    let expiration: TimeInterval
-
+    // MARK: Lifecycle
     init(_ filePath: String, expiration: TimeInterval) {
         self.expiration = Date().timeIntervalSince1970 + expiration
         self.infoFilePath = "info/\(filePath)"
         self.filePath = "\(filePath)"
     }
 
+    // MARK: Internal
+    let filePath: String
+    let infoFilePath: String
+    let expiration: TimeInterval
+
     static func getInfoPath(pathOf filePath: String) -> String {
         return "info/\(filePath)"
+    }
+
+    static func decoder(of path: String) -> Self? {
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+            return try? JSONDecoder().decode(self, from: data)
+        }
+        return nil
     }
 
     func encoder(of path: String) -> Bool {
@@ -343,19 +356,11 @@ private class RequestCacheInfo: Codable {
         }
         return false
     }
-
-    static func decoder(of path: String) -> Self? {
-        if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
-            return try? JSONDecoder().decode(self, from: data)
-        }
-        return nil
-    }
 }
 
 /// 该类获取缓存方法都会堵塞当前线程
 public class CacheManager {
-    fileprivate static let queue: DispatchQueue = DispatchQueue(label: "cn.tcoding.DVTNetwork.cacheManager")
-
+    // MARK: Public
     public static func removeAll() {
         try? FileManager.default.removeItem(atPath: self.cacheBasePath)
     }
@@ -394,9 +399,21 @@ public class CacheManager {
             print("get file path error: \(error)")
         }
     }
+
+    // MARK: Fileprivate
+    fileprivate static let queue = DispatchQueue(label: "cn.tcoding.DVTNetwork.cacheManager")
 }
 
 private extension CacheManager {
+    static var cacheBasePath: String {
+        let path = (NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? "").appending("/cn.tcoding.Cache.Request")
+        if self.createBaseDirectory(at: path) {
+            _ = self.createBaseDirectory(at: path + "/info")
+            return path
+        }
+        return ""
+    }
+
     static func cache(_ filePath: String) -> Data? {
         let infoFilePath = RequestCacheInfo.getInfoPath(pathOf: filePath)
         if let tempCacheInfo = RequestCacheInfo.decoder(of: "\(self.cacheBasePath)/\(infoFilePath)") {
@@ -424,7 +441,7 @@ private extension CacheManager {
     }
 
     static func addCache(_ filePath: String, data: Data, expiration: TimeInterval, completionBlock: ((_ success: Bool) -> Void)? = nil) {
-        guard !self.cacheBasePath.isEmpty && !filePath.isEmpty else {
+        guard !self.cacheBasePath.isEmpty, !filePath.isEmpty else {
             if completionBlock != nil {
                 completionBlock?(false)
             }
@@ -435,7 +452,7 @@ private extension CacheManager {
             var flag = true
             do {
                 try data.write(to: URL(fileURLWithPath: "\(self.cacheBasePath)/\(cacheInfo.filePath)"))
-            } catch let error {
+            } catch {
                 NetLoger.error(error)
                 flag = false
             }
@@ -475,14 +492,5 @@ private extension CacheManager {
             return false
         }
         return true
-    }
-
-    static var cacheBasePath: String {
-        let path = (NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? "").appending("/cn.tcoding.Cache.Request")
-        if self.createBaseDirectory(at: path) {
-            _ = self.createBaseDirectory(at: path + "/info")
-            return path
-        }
-        return ""
     }
 }
