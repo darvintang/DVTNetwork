@@ -261,7 +261,9 @@ public extension Session {
     // MARK: Fileprivate
     fileprivate
     func success(_ request: Request, value: String, isCache: Bool) {
-        NetLoger.debug("接口", request.requestURL, "的返回数据：", value)
+        if request.isPrintResult {
+            NetLoger.debug("接口", request.requestURL, "的返回数据：", value)
+        }
         let tempValue = request.decrypt(value)
         guard let (handleValue, handleError) = request.preOperation(tempValue, error: nil, isCache: isCache) else {
             return

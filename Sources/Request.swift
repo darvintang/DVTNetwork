@@ -81,6 +81,7 @@ open class Request {
     open private(set) var method: AFHTTPMethod = .post
     open private(set) var parameterEncoding: AFParameterEncoding = AFURLEncoding.default
     open private(set) var resultEncoding: String.Encoding = .utf8
+    open private(set) var isPrintResult = true
 
     // MARK: - 请求路径
 
